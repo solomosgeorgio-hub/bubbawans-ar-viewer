@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Bubbawans AR Viewer</title>
+    <title>AR Viewer</title>
     
     <!-- Model Viewer with WebXR support -->
     <script type="module" src="https://unpkg.com/@google/model-viewer@3.3.0/dist/model-viewer.min.js"></script>
@@ -31,43 +31,22 @@
             background: linear-gradient(180deg, #0a0a0a 0%, #1a1a2e 100%);
         }
         
-        /* Title */
-        .title {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 30px;
-            font-size: 18px;
-            font-weight: bold;
-            z-index: 100;
-            backdrop-filter: blur(10px);
-            max-width: 90%;
-            text-align: center;
-        }
-        
-        /* AR Button */
+        /* AR Button - RAISED to avoid navigation buttons */
         button[slot="ar-button"] {
             position: absolute;
-            bottom: 30px;
+            bottom: 120px; /* Raised from 30px to 120px */
             left: 50%;
             transform: translateX(-50%);
             background: linear-gradient(135deg, #0DF2DF, #0AC5B8);
             border: none;
             color: white;
-            padding: 18px 40px;
+            padding: 20px 50px;
             border-radius: 30px;
-            font-size: 18px;
+            font-size: 20px;
             font-weight: bold;
             cursor: pointer;
             z-index: 1000;
-            box-shadow: 0 8px 30px rgba(13, 242, 223, 0.5);
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            box-shadow: 0 8px 30px rgba(13, 242, 223, 0.6);
         }
         
         button[slot="ar-button"]:active {
@@ -109,10 +88,10 @@
             max-width: 80%;
         }
         
-        /* Instructions */
+        /* Instructions - during 3D preview */
         .instructions {
             position: absolute;
-            bottom: 100px;
+            bottom: 200px; /* Raised to be above AR button */
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.7);
@@ -125,19 +104,37 @@
             backdrop-filter: blur(10px);
             z-index: 90;
         }
+        
+        /* AR Instructions - during AR session */
+        .ar-instructions {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 14px;
+            text-align: center;
+            max-width: 90%;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            display: none;
+        }
     </style>
 </head>
 <body>
     <div id="loading">
         <div class="spinner"></div>
-        <div>Loading AR Viewer...</div>
+        <div>Loading...</div>
     </div>
     
     <script>
         // Get parameters from URL
         const urlParams = new URLSearchParams(window.location.search);
         const modelUrl = urlParams.get('model');
-        const title = urlParams.get('title') || 'Bubbawan Item';
+        const title = urlParams.get('title') || 'AR Item';
         
         const loadingDiv = document.getElementById('loading');
         
@@ -145,39 +142,45 @@
             // No model URL provided
             document.body.innerHTML = '<div id="loading" class="error">' +
                 '<div style="font-size: 48px; margin-bottom: 20px;">🎯</div>' +
-                '<div style="font-size: 20px; margin-bottom: 10px;">Bubbawans AR Viewer</div>' +
+                '<div style="font-size: 20px; margin-bottom: 10px;">AR Viewer</div>' +
                 '<div style="font-size: 14px; color: rgba(255,255,255,0.7);">' +
-                'No 3D model URL provided.<br>This page is for viewing AR models from the Bubbawans app.' +
+                'No 3D model provided.' +
                 '</div></div>';
         } else {
-            // Load the model viewer
-            document.body.innerHTML = '<div class="title">' + decodeURIComponent(title) + '</div>' +
+            // Load the model viewer - NO TITLE DIV!
+            document.body.innerHTML = 
                 '<model-viewer id="viewer" src="' + decodeURIComponent(modelUrl) + '" ' +
                 'alt="' + decodeURIComponent(title) + '" ' +
-                'ar ar-modes="webxr quick-look" camera-controls auto-rotate ' +
-                'shadow-intensity="1" camera-orbit="0deg 75deg 105%" ' +
-                'min-camera-orbit="auto auto 100%" max-camera-orbit="auto auto 400%" ' +
-                'interpolation-decay="200">' +
-                '<button slot="ar-button" id="ar-button">👆 VIEW IN AR</button>' +
+                'ar ar-modes="webxr quick-look" ' +
+                'camera-controls auto-rotate ' +
+                'shadow-intensity="1" ' +
+                'camera-orbit="0deg 75deg 105%" ' +
+                'min-camera-orbit="auto auto 100%" ' +
+                'max-camera-orbit="auto auto 400%" ' +
+                'ar-scale="auto" ' +
+                'interaction-prompt="none">' +
+                '<button slot="ar-button" id="ar-button">View in AR</button>' +
                 '</model-viewer>' +
                 '<div class="instructions" id="instructions">🤏 Pinch to zoom • 👉 Drag to rotate</div>' +
-                '<div id="loading"><div class="spinner"></div><div>Loading 3D Model...</div></div>';
+                '<div class="ar-instructions" id="ar-instructions">👆 Tap to place • 🤏 Pinch to resize • 👉 Drag to move</div>' +
+                '<div id="loading"><div class="spinner"></div><div>Loading Model...</div></div>';
             
             // Setup viewer event handlers
             const viewer = document.getElementById('viewer');
             const loading = document.getElementById('loading');
             const instructions = document.getElementById('instructions');
+            const arInstructions = document.getElementById('ar-instructions');
             const arButton = document.getElementById('ar-button');
             
             viewer.addEventListener('load', function() {
-                console.log('✅ Model loaded successfully');
+                console.log('✅ Model loaded');
                 loading.style.display = 'none';
                 
                 // Check AR support
                 if (viewer.canActivateAR) {
-                    console.log('✅ WebXR AR is supported');
+                    console.log('✅ WebXR AR supported');
                 } else {
-                    console.warn('⚠️ WebXR AR not supported on this device');
+                    console.warn('⚠️ WebXR AR not supported');
                     arButton.textContent = 'AR Not Available';
                     arButton.style.opacity = '0.5';
                     arButton.disabled = true;
@@ -185,15 +188,15 @@
             });
             
             viewer.addEventListener('error', function(event) {
-                console.error('❌ Model loading error:', event);
-                loading.innerHTML = '<div class="error">Failed to load 3D model.<br>Please try again.</div>';
+                console.error('❌ Model error:', event);
+                loading.innerHTML = '<div class="error">Failed to load model.<br>Please try again.</div>';
             });
             
             viewer.addEventListener('progress', function(event) {
                 const percent = Math.round(event.detail.totalProgress * 100);
                 const loadingText = loading.querySelector('div:last-child');
                 if (loadingText) {
-                    loadingText.textContent = 'Loading 3D Model... ' + percent + '%';
+                    loadingText.textContent = 'Loading... ' + percent + '%';
                 }
             });
             
@@ -203,11 +206,13 @@
                 
                 if (event.detail.status === 'not-presenting') {
                     instructions.style.display = 'block';
+                    arInstructions.style.display = 'none';
                 } else if (event.detail.status === 'session-started') {
                     instructions.style.display = 'none';
-                    console.log('🎉 WebXR AR Session Started!');
+                    arInstructions.style.display = 'block';
+                    console.log('🎉 AR Started!');
                 } else if (event.detail.status === 'failed') {
-                    alert('AR failed to start. Please grant camera permissions and try again.');
+                    alert('AR failed. Please grant camera permissions.');
                 }
             });
             
@@ -223,7 +228,7 @@
                 if (loading.style.display !== 'none') {
                     const loadingText = loading.querySelector('div:last-child');
                     if (loadingText) {
-                        loadingText.innerHTML = 'Still loading...<br>This may take a while for large models.';
+                        loadingText.innerHTML = 'Still loading...<br>Large file may take time.';
                     }
                 }
             }, 10000);
