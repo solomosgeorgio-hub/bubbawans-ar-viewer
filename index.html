@@ -31,6 +31,16 @@
             background: linear-gradient(180deg, #0a0a0a 0%, #1a1a2e 100%);
         }
         
+        /* Hide all model-viewer interaction prompts */
+        model-viewer .interaction-prompt,
+        model-viewer .annotation,
+        model-viewer .HotspotAnnotation,
+        model-viewer > button:not([slot="ar-button"]) {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+        }
+        
         /* AR Button - RAISED to avoid navigation buttons */
         button[slot="ar-button"] {
             position: absolute;
@@ -154,7 +164,9 @@
                 'min-camera-orbit="auto auto 100%" ' +
                 'max-camera-orbit="auto auto 400%" ' +
                 'ar-scale="auto" ' +
-                'interaction-prompt="none">' +
+                'interaction-prompt="none" ' +
+                'interaction-prompt-style="display: none" ' +
+                'interaction-policy="allow-when-focused">' +
                 '<button slot="ar-button" id="ar-button">View in AR</button>' +
                 '</model-viewer>' +
                 '<div class="gesture-hint" id="gesture-hint">👆</div>' +
