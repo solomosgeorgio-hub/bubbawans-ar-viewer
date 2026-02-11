@@ -34,7 +34,7 @@
         /* AR Button - RAISED to avoid navigation buttons */
         button[slot="ar-button"] {
             position: absolute;
-            bottom: 120px; /* Raised from 30px to 120px */
+            bottom: 120px;
             left: 50%;
             transform: translateX(-50%);
             background: linear-gradient(135deg, #0DF2DF, #0AC5B8);
@@ -47,10 +47,21 @@
             cursor: pointer;
             z-index: 1000;
             box-shadow: 0 8px 30px rgba(13, 242, 223, 0.6);
+            animation: subtlePulse 3s ease-in-out infinite;
         }
         
         button[slot="ar-button"]:active {
             transform: translateX(-50%) scale(0.95);
+        }
+        
+        /* Subtle pulse animation for AR button */
+        @keyframes subtlePulse {
+            0%, 100% {
+                box-shadow: 0 8px 30px rgba(13, 242, 223, 0.6);
+            }
+            50% {
+                box-shadow: 0 8px 40px rgba(13, 242, 223, 0.8);
+            }
         }
         
         /* Loading State */
@@ -88,39 +99,24 @@
             max-width: 80%;
         }
         
-        /* Instructions - during 3D preview */
-        .instructions {
+        /* Subtle hand gesture hint - shows briefly then fades */
+        .gesture-hint {
             position: absolute;
-            bottom: 200px; /* Raised to be above AR button */
+            top: 50%;
             left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 12px 20px;
-            border-radius: 12px;
-            font-size: 14px;
-            text-align: center;
-            max-width: 90%;
-            backdrop-filter: blur(10px);
-            z-index: 90;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            z-index: 80;
+            animation: fadeInOut 4s ease-in-out;
+            pointer-events: none;
+            opacity: 0;
         }
         
-        /* AR Instructions - during AR session */
-        .ar-instructions {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 30px;
-            font-size: 14px;
-            text-align: center;
-            max-width: 90%;
-            backdrop-filter: blur(10px);
-            z-index: 100;
-            display: none;
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+            15% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+            85% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
         }
     </style>
 </head>
@@ -147,7 +143,7 @@
                 'No 3D model provided.' +
                 '</div></div>';
         } else {
-            // Load the model viewer - NO TITLE DIV!
+            // Load the model viewer - NO TEXT INSTRUCTIONS!
             document.body.innerHTML = 
                 '<model-viewer id="viewer" src="' + decodeURIComponent(modelUrl) + '" ' +
                 'alt="' + decodeURIComponent(title) + '" ' +
@@ -161,20 +157,25 @@
                 'interaction-prompt="none">' +
                 '<button slot="ar-button" id="ar-button">View in AR</button>' +
                 '</model-viewer>' +
-                '<div class="instructions" id="instructions">🤏 Pinch to zoom • 👉 Drag to rotate</div>' +
-                '<div class="ar-instructions" id="ar-instructions">👆 Tap to place • 🤏 Pinch to resize • 👉 Drag to move</div>' +
+                '<div class="gesture-hint" id="gesture-hint">👆</div>' +
                 '<div id="loading"><div class="spinner"></div><div>Loading Model...</div></div>';
             
             // Setup viewer event handlers
             const viewer = document.getElementById('viewer');
             const loading = document.getElementById('loading');
-            const instructions = document.getElementById('instructions');
-            const arInstructions = document.getElementById('ar-instructions');
+            const gestureHint = document.getElementById('gesture-hint');
             const arButton = document.getElementById('ar-button');
             
             viewer.addEventListener('load', function() {
                 console.log('✅ Model loaded');
                 loading.style.display = 'none';
+                
+                // Show subtle gesture hint after a moment
+                setTimeout(function() {
+                    if (gestureHint) {
+                        gestureHint.style.animation = 'fadeInOut 4s ease-in-out';
+                    }
+                }, 500);
                 
                 // Check AR support
                 if (viewer.canActivateAR) {
@@ -204,12 +205,7 @@
             viewer.addEventListener('ar-status', function(event) {
                 console.log('AR Status:', event.detail.status);
                 
-                if (event.detail.status === 'not-presenting') {
-                    instructions.style.display = 'block';
-                    arInstructions.style.display = 'none';
-                } else if (event.detail.status === 'session-started') {
-                    instructions.style.display = 'none';
-                    arInstructions.style.display = 'block';
+                if (event.detail.status === 'session-started') {
                     console.log('🎉 AR Started!');
                 } else if (event.detail.status === 'failed') {
                     alert('AR failed. Please grant camera permissions.');
