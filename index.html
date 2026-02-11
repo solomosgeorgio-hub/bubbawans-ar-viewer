@@ -143,49 +143,25 @@
         
         if (!modelUrl) {
             // No model URL provided
-            document.body.innerHTML = `
-                <div id="loading" class="error">
-                    <div style="font-size: 48px; margin-bottom: 20px;">🎯</div>
-                    <div style="font-size: 20px; margin-bottom: 10px;">Bubbawans AR Viewer</div>
-                    <div style="font-size: 14px; color: rgba(255,255,255,0.7);">
-                        No 3D model URL provided.<br>
-                        This page is for viewing AR models from the Bubbawans app.
-                    </div>
-                </div>
-            `;
+            document.body.innerHTML = '<div id="loading" class="error">' +
+                '<div style="font-size: 48px; margin-bottom: 20px;">🎯</div>' +
+                '<div style="font-size: 20px; margin-bottom: 10px;">Bubbawans AR Viewer</div>' +
+                '<div style="font-size: 14px; color: rgba(255,255,255,0.7);">' +
+                'No 3D model URL provided.<br>This page is for viewing AR models from the Bubbawans app.' +
+                '</div></div>';
         } else {
             // Load the model viewer
-            document.body.innerHTML = `
-                <div class="title">${decodeURIComponent(title)}</div>
-                
-                <model-viewer
-                    id="viewer"
-                    src="${decodeURIComponent(modelUrl)}"
-                    alt="${decodeURIComponent(title)}"
-                    ar
-                    ar-modes="webxr quick-look"
-                    camera-controls
-                    auto-rotate
-                    shadow-intensity="1"
-                    camera-orbit="0deg 75deg 105%"
-                    min-camera-orbit="auto auto 100%"
-                    max-camera-orbit="auto auto 400%"
-                    interpolation-decay="200"
-                >
-                    <button slot="ar-button" id="ar-button">
-                        👆 VIEW IN AR
-                    </button>
-                </model-viewer>
-                
-                <div class="instructions" id="instructions">
-                    🤏 Pinch to zoom • 👉 Drag to rotate
-                </div>
-                
-                <div id="loading">
-                    <div class="spinner"></div>
-                    <div>Loading 3D Model...</div>
-                </div>
-            `;
+            document.body.innerHTML = '<div class="title">' + decodeURIComponent(title) + '</div>' +
+                '<model-viewer id="viewer" src="' + decodeURIComponent(modelUrl) + '" ' +
+                'alt="' + decodeURIComponent(title) + '" ' +
+                'ar ar-modes="webxr quick-look" camera-controls auto-rotate ' +
+                'shadow-intensity="1" camera-orbit="0deg 75deg 105%" ' +
+                'min-camera-orbit="auto auto 100%" max-camera-orbit="auto auto 400%" ' +
+                'interpolation-decay="200">' +
+                '<button slot="ar-button" id="ar-button">👆 VIEW IN AR</button>' +
+                '</model-viewer>' +
+                '<div class="instructions" id="instructions">🤏 Pinch to zoom • 👉 Drag to rotate</div>' +
+                '<div id="loading"><div class="spinner"></div><div>Loading 3D Model...</div></div>';
             
             // Setup viewer event handlers
             const viewer = document.getElementById('viewer');
@@ -193,7 +169,7 @@
             const instructions = document.getElementById('instructions');
             const arButton = document.getElementById('ar-button');
             
-            viewer.addEventListener('load', () => {
+            viewer.addEventListener('load', function() {
                 console.log('✅ Model loaded successfully');
                 loading.style.display = 'none';
                 
@@ -208,21 +184,21 @@
                 }
             });
             
-            viewer.addEventListener('error', (event) => {
+            viewer.addEventListener('error', function(event) {
                 console.error('❌ Model loading error:', event);
                 loading.innerHTML = '<div class="error">Failed to load 3D model.<br>Please try again.</div>';
             });
             
-            viewer.addEventListener('progress', (event) => {
+            viewer.addEventListener('progress', function(event) {
                 const percent = Math.round(event.detail.totalProgress * 100);
                 const loadingText = loading.querySelector('div:last-child');
                 if (loadingText) {
-                    loadingText.textContent = \`Loading 3D Model... \${percent}%\`;
+                    loadingText.textContent = 'Loading 3D Model... ' + percent + '%';
                 }
             });
             
             // AR session events
-            viewer.addEventListener('ar-status', (event) => {
+            viewer.addEventListener('ar-status', function(event) {
                 console.log('AR Status:', event.detail.status);
                 
                 if (event.detail.status === 'not-presenting') {
@@ -237,13 +213,13 @@
             
             // AR button click
             if (arButton) {
-                arButton.addEventListener('click', () => {
+                arButton.addEventListener('click', function() {
                     console.log('🚀 AR button clicked');
                 });
             }
             
             // Timeout fallback
-            setTimeout(() => {
+            setTimeout(function() {
                 if (loading.style.display !== 'none') {
                     const loadingText = loading.querySelector('div:last-child');
                     if (loadingText) {
