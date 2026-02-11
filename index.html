@@ -35,7 +35,8 @@
         model-viewer .interaction-prompt,
         model-viewer .annotation,
         model-viewer .HotspotAnnotation,
-        model-viewer > button:not([slot="ar-button"]) {
+        model-viewer > button:not([slot="ar-button"]),
+        model-viewer::part(default-progress-bar) {
             display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
@@ -64,7 +65,6 @@
             transform: translateX(-50%) scale(0.95);
         }
         
-        /* Subtle pulse animation for AR button */
         @keyframes subtlePulse {
             0%, 100% {
                 box-shadow: 0 8px 30px rgba(13, 242, 223, 0.6);
@@ -109,7 +109,7 @@
             max-width: 80%;
         }
         
-        /* Subtle hand gesture hint - shows briefly then fades */
+        /* Subtle hand gesture hint */
         .gesture-hint {
             position: absolute;
             top: 50%;
@@ -141,11 +141,11 @@
         const urlParams = new URLSearchParams(window.location.search);
         const modelUrl = urlParams.get('model');
         const title = urlParams.get('title') || 'AR Item';
+        const autoAR = urlParams.get('autoAR') === 'true'; // ✅ NEW: Auto-trigger AR
         
         const loadingDiv = document.getElementById('loading');
         
         if (!modelUrl) {
-            // No model URL provided
             document.body.innerHTML = '<div id="loading" class="error">' +
                 '<div style="font-size: 48px; margin-bottom: 20px;">🎯</div>' +
                 '<div style="font-size: 20px; margin-bottom: 10px;">AR Viewer</div>' +
@@ -153,7 +153,7 @@
                 'No 3D model provided.' +
                 '</div></div>';
         } else {
-            // Load the model viewer - NO TEXT INSTRUCTIONS!
+            // Load the model viewer
             document.body.innerHTML = 
                 '<model-viewer id="viewer" src="' + decodeURIComponent(modelUrl) + '" ' +
                 'alt="' + decodeURIComponent(title) + '" ' +
@@ -164,6 +164,7 @@
                 'min-camera-orbit="auto auto 100%" ' +
                 'max-camera-orbit="auto auto 400%" ' +
                 'ar-scale="auto" ' +
+                'ar-placement="floor" ' +
                 'interaction-prompt="none" ' +
                 'interaction-prompt-style="display: none" ' +
                 'interaction-policy="allow-when-focused">' +
@@ -182,7 +183,7 @@
                 console.log('✅ Model loaded');
                 loading.style.display = 'none';
                 
-                // Show subtle gesture hint after a moment
+                // Show subtle gesture hint
                 setTimeout(function() {
                     if (gestureHint) {
                         gestureHint.style.animation = 'fadeInOut 4s ease-in-out';
@@ -192,6 +193,19 @@
                 // Check AR support
                 if (viewer.canActivateAR) {
                     console.log('✅ WebXR AR supported');
+                    
+                    // ✅ AUTO-TRIGGER AR if autoAR parameter is true
+                    if (autoAR) {
+                        console.log('🚀 Auto-triggering AR...');
+                        setTimeout(function() {
+                            try {
+                                viewer.activateAR();
+                            } catch (e) {
+                                console.error('Auto-AR failed:', e);
+                                // If auto-trigger fails, user can still click button
+                            }
+                        }, 1000); // Wait 1 second for model to fully load
+                    }
                 } else {
                     console.warn('⚠️ WebXR AR not supported');
                     arButton.textContent = 'AR Not Available';
