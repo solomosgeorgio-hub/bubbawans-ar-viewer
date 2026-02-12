@@ -131,6 +131,11 @@
     </div>
     
     <script>
+        // Session management
+        let arSessionActive = false;
+        let lastARTime = 0;
+        const AR_COOLDOWN = 1000; // 1 second cooldown between AR attempts
+        
         // Get parameters from URL
         const urlParams = new URLSearchParams(window.location.search);
         const modelUrl = urlParams.get('model');
@@ -147,7 +152,7 @@
                 'No 3D model provided.' +
                 '</div></div>';
         } else {
-            // ✅ WEBXR ONLY - No Scene Viewer!
+            // WEBXR ONLY
             document.body.innerHTML = 
                 '<model-viewer id="viewer" src="' + decodeURIComponent(modelUrl) + '" ' +
                 'alt="' + decodeURIComponent(title) + '" ' +
@@ -183,11 +188,10 @@
                         
                         // Auto-trigger AR if requested
                         if (autoAR) {
-                            console.log('🚀 Auto-triggering AR in 500ms...');
+                            console.log('🚀 Auto-triggering AR in 1000ms...');
                             setTimeout(() => {
-                                console.log('🎯 Clicking AR button now...');
-                                arButton.click();
-                            }, 500);
+                                tryActivateAR();
+                            }, 1000);
                         }
                     } else {
                         console.warn('⚠️ WebXR AR not supported');
@@ -212,29 +216,93 @@
                 }
             });
             
-            // AR session events
+            // AR session events with proper cleanup
             viewer.addEventListener('ar-status', function(event) {
                 console.log('📍 AR Status:', event.detail.status);
                 
                 if (event.detail.status === 'not-presenting') {
+                    arSessionActive = false;
                     instructions.style.display = 'block';
                     arInstructions.style.display = 'none';
+                    console.log('🔓 AR session ended, camera released');
                 } else if (event.detail.status === 'session-started') {
+                    arSessionActive = true;
+                    lastARTime = Date.now();
                     instructions.style.display = 'none';
                     arInstructions.style.display = 'block';
                     console.log('🎉 AR Session Started!');
                 } else if (event.detail.status === 'failed') {
+                    arSessionActive = false;
                     console.error('❌ AR Failed');
-                    alert('AR failed to start. Please:\n\n1. Grant camera permissions\n2. Make sure you\'re using Chrome\n3. Check that ARCore is installed');
+                    
+                    // Check if it's a cooldown issue
+                    const timeSinceLastAR = Date.now() - lastARTime;
+                    if (timeSinceLastAR < AR_COOLDOWN) {
+                        alert('Please wait a moment before trying AR again.\n\nThe camera needs time to fully release from the previous session.');
+                    } else {
+                        alert('AR failed to start.\n\nTry:\n1. Close and reopen this page\n2. Restart Chrome\n3. Restart your phone if issue persists');
+                    }
                 }
             });
             
-            // AR button click
+            // Safe AR activation with cooldown
+            function tryActivateAR() {
+                const now = Date.now();
+                const timeSinceLastAR = now - lastARTime;
+                
+                if (arSessionActive) {
+                    console.log('⚠️ AR session already active');
+                    return;
+                }
+                
+                if (timeSinceLastAR < AR_COOLDOWN && lastARTime > 0) {
+                    console.log('⏳ AR cooldown active, please wait...');
+                    setTimeout(tryActivateAR, AR_COOLDOWN - timeSinceLastAR);
+                    return;
+                }
+                
+                console.log('🎯 Activating AR...');
+                arButton.click();
+            }
+            
+            // AR button click with safety check
             if (arButton) {
-                arButton.addEventListener('click', function() {
+                arButton.addEventListener('click', function(e) {
+                    const now = Date.now();
+                    const timeSinceLastAR = now - lastARTime;
+                    
+                    if (arSessionActive) {
+                        console.log('⚠️ AR session already active, ignoring click');
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false;
+                    }
+                    
+                    if (timeSinceLastAR < AR_COOLDOWN && lastARTime > 0) {
+                        console.log('⏳ AR cooldown active, please wait');
+                        alert('Please wait a moment before trying AR again.');
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false;
+                    }
+                    
                     console.log('🚀 AR button clicked - launching WebXR');
                 });
             }
+            
+            // Page visibility - cleanup on page hide
+            document.addEventListener('visibilitychange', function() {
+                if (document.hidden) {
+                    console.log('📴 Page hidden, marking AR session as inactive');
+                    arSessionActive = false;
+                }
+            });
+            
+            // Cleanup on page unload
+            window.addEventListener('beforeunload', function() {
+                console.log('🧹 Page unloading, cleaning up AR session');
+                arSessionActive = false;
+            });
             
             // Timeout fallback
             setTimeout(function() {
