@@ -1,260 +1,109 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>AR Viewer</title>
-    
-    <!-- Model Viewer with WebXR support -->
-    <script type="module" src="https://unpkg.com/@google/model-viewer@3.3.0/dist/model-viewer.min.js"></script>
-    
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body, html {
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(180deg, #0a0a0a 0%, #1a1a2e 100%);
-        }
-        
-        model-viewer {
-            width: 100vw;
-            height: 100vh;
-            background: linear-gradient(180deg, #0a0a0a 0%, #1a1a2e 100%);
-        }
-        
-        /* Hide all model-viewer interaction prompts */
-        model-viewer .interaction-prompt,
-        model-viewer .annotation,
-        model-viewer .HotspotAnnotation,
-        model-viewer > button:not([slot="ar-button"]),
-        model-viewer::part(default-progress-bar) {
-            display: none !important;
-            visibility: hidden !important;
-            opacity: 0 !important;
-        }
-        
-        /* AR Button - RAISED to avoid navigation buttons */
-        button[slot="ar-button"] {
-            position: absolute;
-            bottom: 120px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: linear-gradient(135deg, #0DF2DF, #0AC5B8);
-            border: none;
-            color: white;
-            padding: 20px 50px;
-            border-radius: 30px;
-            font-size: 20px;
-            font-weight: bold;
-            cursor: pointer;
-            z-index: 1000;
-            box-shadow: 0 8px 30px rgba(13, 242, 223, 0.6);
-            animation: subtlePulse 3s ease-in-out infinite;
-        }
-        
-        button[slot="ar-button"]:active {
-            transform: translateX(-50%) scale(0.95);
-        }
-        
-        @keyframes subtlePulse {
-            0%, 100% {
-                box-shadow: 0 8px 30px rgba(13, 242, 223, 0.6);
-            }
-            50% {
-                box-shadow: 0 8px 40px rgba(13, 242, 223, 0.8);
-            }
-        }
-        
-        /* Loading State */
-        #loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: white;
-            font-size: 18px;
-            text-align: center;
-            z-index: 50;
-        }
-        
-        .spinner {
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top: 4px solid #0DF2DF;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        /* Error State */
-        .error {
-            color: #FF9B82;
-            padding: 20px;
-            text-align: center;
-            max-width: 80%;
-        }
-        
-        /* Subtle hand gesture hint */
-        .gesture-hint {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 48px;
-            z-index: 80;
-            animation: fadeInOut 4s ease-in-out;
-            pointer-events: none;
-            opacity: 0;
-        }
-        
-        @keyframes fadeInOut {
-            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-            15% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
-            85% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
-            100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>AR Viewer</title>
+
+<script type="module" src="https://unpkg.com/@google/model-viewer@3.3.0/dist/model-viewer.min.js"></script>
+
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body, html {
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:linear-gradient(180deg,#0a0a0a 0%,#1a1a2e 100%);
+}
+
+model-viewer {
+  width:100vw;
+  height:100vh;
+}
+
+button[slot="ar-button"] {
+  position:absolute;
+  bottom:120px;
+  left:50%;
+  transform:translateX(-50%);
+  background:linear-gradient(135deg,#0DF2DF,#0AC5B8);
+  border:none;
+  color:white;
+  padding:20px 50px;
+  border-radius:30px;
+  font-size:20px;
+  font-weight:bold;
+  cursor:pointer;
+  z-index:1000;
+  box-shadow:0 8px 30px rgba(13,242,223,0.6);
+}
+</style>
 </head>
+
 <body>
-    <div id="loading">
-        <div class="spinner"></div>
-        <div>Loading...</div>
-    </div>
-    
-    <script>
-        // Get parameters from URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const modelUrl = urlParams.get('model');
-        const title = urlParams.get('title') || 'AR Item';
-        const autoAR = urlParams.get('autoAR') === 'true'; // ✅ NEW: Auto-trigger AR
-        
-        const loadingDiv = document.getElementById('loading');
-        
-        if (!modelUrl) {
-            document.body.innerHTML = '<div id="loading" class="error">' +
-                '<div style="font-size: 48px; margin-bottom: 20px;">🎯</div>' +
-                '<div style="font-size: 20px; margin-bottom: 10px;">AR Viewer</div>' +
-                '<div style="font-size: 14px; color: rgba(255,255,255,0.7);">' +
-                'No 3D model provided.' +
-                '</div></div>';
-        } else {
-            // Load the model viewer
-            document.body.innerHTML = 
-                '<model-viewer id="viewer" src="' + decodeURIComponent(modelUrl) + '" ' +
-                'alt="' + decodeURIComponent(title) + '" ' +
-                'ar ar-modes="webxr quick-look" ' +
-                'camera-controls auto-rotate ' +
-                'shadow-intensity="1" ' +
-                'camera-orbit="0deg 75deg 105%" ' +
-                'min-camera-orbit="auto auto 100%" ' +
-                'max-camera-orbit="auto auto 400%" ' +
-                'ar-scale="auto" ' +
-                'ar-placement="floor" ' +
-                'interaction-prompt="none" ' +
-                'interaction-prompt-style="display: none" ' +
-                'interaction-policy="allow-when-focused">' +
-                '<button slot="ar-button" id="ar-button">View in AR</button>' +
-                '</model-viewer>' +
-                '<div class="gesture-hint" id="gesture-hint">👆</div>' +
-                '<div id="loading"><div class="spinner"></div><div>Loading Model...</div></div>';
-            
-            // Setup viewer event handlers
-            const viewer = document.getElementById('viewer');
-            const loading = document.getElementById('loading');
-            const gestureHint = document.getElementById('gesture-hint');
-            const arButton = document.getElementById('ar-button');
-            
-            viewer.addEventListener('load', function() {
-                console.log('✅ Model loaded');
-                loading.style.display = 'none';
-                
-                // Show subtle gesture hint
-                setTimeout(function() {
-                    if (gestureHint) {
-                        gestureHint.style.animation = 'fadeInOut 4s ease-in-out';
-                    }
-                }, 500);
-                
-                // Check AR support
-                if (viewer.canActivateAR) {
-                    console.log('✅ WebXR AR supported');
-                    
-                    // ✅ AUTO-TRIGGER AR if autoAR parameter is true
-                    if (autoAR) {
-                        console.log('🚀 Auto-triggering AR...');
-                        setTimeout(function() {
-                            try {
-                                viewer.activateAR();
-                            } catch (e) {
-                                console.error('Auto-AR failed:', e);
-                                // If auto-trigger fails, user can still click button
-                            }
-                        }, 1000); // Wait 1 second for model to fully load
-                    }
-                } else {
-                    console.warn('⚠️ WebXR AR not supported');
-                    arButton.textContent = 'AR Not Available';
-                    arButton.style.opacity = '0.5';
-                    arButton.disabled = true;
-                }
-            });
-            
-            viewer.addEventListener('error', function(event) {
-                console.error('❌ Model error:', event);
-                loading.innerHTML = '<div class="error">Failed to load model.<br>Please try again.</div>';
-            });
-            
-            viewer.addEventListener('progress', function(event) {
-                const percent = Math.round(event.detail.totalProgress * 100);
-                const loadingText = loading.querySelector('div:last-child');
-                if (loadingText) {
-                    loadingText.textContent = 'Loading... ' + percent + '%';
-                }
-            });
-            
-            // AR session events
-            viewer.addEventListener('ar-status', function(event) {
-                console.log('AR Status:', event.detail.status);
-                
-                if (event.detail.status === 'session-started') {
-                    console.log('🎉 AR Started!');
-                } else if (event.detail.status === 'failed') {
-                    alert('AR failed. Please grant camera permissions.');
-                }
-            });
-            
-            // AR button click
-            if (arButton) {
-                arButton.addEventListener('click', function() {
-                    console.log('🚀 AR button clicked');
-                });
-            }
-            
-            // Timeout fallback
-            setTimeout(function() {
-                if (loading.style.display !== 'none') {
-                    const loadingText = loading.querySelector('div:last-child');
-                    if (loadingText) {
-                        loadingText.innerHTML = 'Still loading...<br>Large file may take time.';
-                    }
-                }
-            }, 10000);
-        }
-    </script>
+
+<div id="loading">
+  <div style="color:white;text-align:center;margin-top:50%">Loading...</div>
+</div>
+
+<script>
+const urlParams = new URLSearchParams(window.location.search);
+const modelUrl = urlParams.get('model');
+const title = urlParams.get('title') || 'AR Item';
+const autoAR = urlParams.get('autoAR') === 'true';
+
+if (!modelUrl) {
+  document.body.innerHTML = '<div style="color:white;text-align:center;margin-top:50%">No 3D model provided.</div>';
+} else {
+
+document.body.innerHTML = `
+<model-viewer id="viewer"
+  src="${decodeURIComponent(modelUrl)}"
+  alt="${decodeURIComponent(title)}"
+  ar
+  ar-modes="webxr"
+  camera-controls
+  auto-rotate
+  shadow-intensity="1"
+  ar-scale="auto"
+  ar-placement="floor">
+
+  <button slot="ar-button" id="ar-button">View in AR</button>
+</model-viewer>
+
+<div id="loading" style="color:white;text-align:center;margin-top:50%">Loading Model...</div>
+`;
+
+const viewer = document.getElementById('viewer');
+const loading = document.getElementById('loading');
+
+viewer.addEventListener('load', () => {
+  console.log('✅ Model loaded');
+  loading.style.display = 'none';
+
+  if (autoAR) {
+    setTimeout(() => viewer.activateAR(), 1000);
+  }
+});
+
+viewer.addEventListener('error', (e) => {
+  console.error('❌ Model error:', e);
+  loading.innerHTML = 'Failed to load model.';
+});
+
+viewer.addEventListener('ar-status', (event) => {
+  console.log('AR Status:', event.detail.status);
+
+  if (event.detail.status === 'failed') {
+    alert('AR failed. WebXR not supported on this device.');
+  }
+});
+}
+</script>
+
 </body>
 </html>
