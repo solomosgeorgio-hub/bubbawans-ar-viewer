@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>AR Viewer</title>
+    
+    <!-- Model Viewer with WebXR support -->
+    <script type="module" src="https://unpkg.com/@google/model-viewer@3.3.0/dist/model-viewer.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(180deg, #0a0a0a 0%, #1a1a2e 100%);
+        }
+        
+        model-viewer {
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(180deg, #0a0a0a 0%, #1a1a2e 100%);
+        }
+        
+        /* AR Button */
+        button[slot="ar-button"] {
+            position: absolute;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #0DF2DF, #0AC5B8);
+            border: none;
+            color: white;
+            padding: 20px 50px;
+            border-radius: 30px;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 1000;
+            box-shadow: 0 8px 30px rgba(13, 242, 223, 0.6);
+        }
+        
+        button[slot="ar-button"]:active {
+            transform: translateX(-50%) scale(0.95);
+        }
+        
+        /* Loading State */
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 18px;
+            text-align: center;
+            z-index: 50;
+        }
+        
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #0DF2DF;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Error State */
+        .error {
+            color: #FF9B82;
+            padding: 20px;
+            text-align: center;
+            max-width: 90%;
+        }
+        
+        /* Instructions */
+        .instructions {
+            position: absolute;
+            bottom: 200px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            text-align: center;
+            max-width: 90%;
+            backdrop-filter: blur(10px);
+            z-index: 90;
+        }
+        
+        /* AR Instructions */
+        .ar-instructions {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 14px;
+            text-align: center;
+            max-width: 90%;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <div class="spinner"></div>
+        <div>Loading...</div>
+    </div>
+    
+    <script>
+        // Get parameters from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const modelUrl = urlParams.get('model');
+        const title = urlParams.get('title') || 'AR Item';
+        const autoAR = urlParams.get('autoAR') === 'true';
+        
+        const loadingDiv = document.getElementById('loading');
+        
+        if (!modelUrl) {
+            document.body.innerHTML = '<div id="loading" class="error">' +
+                '<div style="font-size: 48px; margin-bottom: 20px;">🎯</div>' +
+                '<div style="font-size: 20px; margin-bottom: 10px;">AR Viewer</div>' +
+                '<div style="font-size: 14px; color: rgba(255,255,255,0.7);">' +
+                'No 3D model provided.' +
+                '</div></div>';
+        } else {
+            // ✅ WEBXR ONLY - No Scene Viewer!
+            document.body.innerHTML = 
+                '<model-viewer id="viewer" src="' + decodeURIComponent(modelUrl) + '" ' +
+                'alt="' + decodeURIComponent(title) + '" ' +
+                'ar ar-modes="webxr" ' +
+                'camera-controls auto-rotate ' +
+                'shadow-intensity="1" ' +
+                'camera-orbit="0deg 75deg 105%" ' +
+                'min-camera-orbit="auto auto 100%" ' +
+                'max-camera-orbit="auto auto 400%" ' +
+                'ar-scale="auto" ' +
+                'ar-placement="floor" ' +
+                'interaction-prompt="none">' +
+                '<button slot="ar-button" id="ar-button">View in AR</button>' +
+                '</model-viewer>' +
+                '<div class="instructions" id="instructions">🤏 Pinch to zoom • 👉 Drag to rotate</div>' +
+                '<div class="ar-instructions" id="ar-instructions">👆 Tap to place • 🤏 Pinch to resize • 👉 Drag to move</div>' +
+                '<div id="loading"><div class="spinner"></div><div>Loading Model...</div></div>';
+            
+            const viewer = document.getElementById('viewer');
+            const loading = document.getElementById('loading');
+            const instructions = document.getElementById('instructions');
+            const arInstructions = document.getElementById('ar-instructions');
+            const arButton = document.getElementById('ar-button');
+            
+            viewer.addEventListener('load', function() {
+                console.log('✅ Model loaded');
+                loading.style.display = 'none';
+                
+                // Check AR support
+                setTimeout(function() {
+                    if (viewer.canActivateAR) {
+                        console.log('✅ WebXR AR supported');
+                        
+                        // Auto-trigger AR if requested
+                        if (autoAR) {
+                            console.log('🚀 Auto-triggering AR in 500ms...');
+                            setTimeout(() => {
+                                console.log('🎯 Clicking AR button now...');
+                                arButton.click();
+                            }, 500);
+                        }
+                    } else {
+                        console.warn('⚠️ WebXR AR not supported');
+                        arButton.textContent = 'AR Not Available';
+                        arButton.style.opacity = '0.5';
+                        arButton.disabled = true;
+                        instructions.innerHTML = '⚠️ WebXR not available on this device';
+                    }
+                }, 1000);
+            });
+            
+            viewer.addEventListener('error', function(event) {
+                console.error('❌ Model error:', event);
+                loading.innerHTML = '<div class="error">Failed to load model.<br>Please check the file URL.</div>';
+            });
+            
+            viewer.addEventListener('progress', function(event) {
+                const percent = Math.round(event.detail.totalProgress * 100);
+                const loadingText = loading.querySelector('div:last-child');
+                if (loadingText) {
+                    loadingText.textContent = 'Loading... ' + percent + '%';
+                }
+            });
+            
+            // AR session events
+            viewer.addEventListener('ar-status', function(event) {
+                console.log('📍 AR Status:', event.detail.status);
+                
+                if (event.detail.status === 'not-presenting') {
+                    instructions.style.display = 'block';
+                    arInstructions.style.display = 'none';
+                } else if (event.detail.status === 'session-started') {
+                    instructions.style.display = 'none';
+                    arInstructions.style.display = 'block';
+                    console.log('🎉 AR Session Started!');
+                } else if (event.detail.status === 'failed') {
+                    console.error('❌ AR Failed');
+                    alert('AR failed to start. Please:\n\n1. Grant camera permissions\n2. Make sure you\'re using Chrome\n3. Check that ARCore is installed');
+                }
+            });
+            
+            // AR button click
+            if (arButton) {
+                arButton.addEventListener('click', function() {
+                    console.log('🚀 AR button clicked - launching WebXR');
+                });
+            }
+            
+            // Timeout fallback
+            setTimeout(function() {
+                if (loading.style.display !== 'none') {
+                    const loadingText = loading.querySelector('div:last-child');
+                    if (loadingText) {
+                        loadingText.innerHTML = 'Still loading...<br>Large file may take time.';
+                    }
+                }
+            }, 10000);
+        }
+    </script>
+</body>
+</html>
