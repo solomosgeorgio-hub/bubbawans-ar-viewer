@@ -7,9 +7,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>AR Viewer</title>
     
-    <!-- Three.js for WebXR -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.159.0/examples/js/loaders/GLTFLoader.js"></script>
+    <!-- Model Viewer 3.5 - Latest version -->
+    <script type="module" src="https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
     
     <style>
         * {
@@ -27,14 +26,15 @@
             touch-action: none;
         }
         
-        #canvas3d {
-            width: 100%;
-            height: 100%;
-            display: block;
+        model-viewer {
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(180deg, #0a0a0a 0%, #1a1a2e 100%);
+            --progress-bar-color: #0DF2DF;
         }
         
         /* AR Button */
-        #ar-button {
+        button[slot="ar-button"] {
             position: absolute;
             bottom: 120px;
             left: 50%;
@@ -49,20 +49,13 @@
             cursor: pointer;
             z-index: 1000;
             box-shadow: 0 8px 30px rgba(13, 242, 223, 0.6);
-            transition: all 0.3s ease;
         }
         
-        #ar-button:active {
+        button[slot="ar-button"]:active {
             transform: translateX(-50%) scale(0.95);
         }
         
-        #ar-button:disabled {
-            opacity: 0.5;
-            background: #666;
-            cursor: not-allowed;
-        }
-        
-        /* Photo Button - shown during AR */
+        /* Photo Button */
         #photo-button {
             position: absolute;
             bottom: 40px;
@@ -87,6 +80,11 @@
             transform: translateX(-50%) scale(0.9);
         }
         
+        /* Hidden canvas for screenshots */
+        #screenshot-canvas {
+            display: none;
+        }
+        
         /* Flash effect */
         #flash {
             position: fixed;
@@ -105,7 +103,7 @@
             opacity: 1;
         }
         
-        /* Loading State */
+        /* Loading */
         #loading {
             position: absolute;
             top: 50%;
@@ -132,7 +130,11 @@
             100% { transform: rotate(360deg); }
         }
         
-        /* Instructions */
+        .error {
+            color: #FF9B82;
+            padding: 20px;
+        }
+        
         .instructions {
             position: absolute;
             bottom: 200px;
@@ -149,7 +151,6 @@
             z-index: 90;
         }
         
-        /* AR Instructions */
         .ar-instructions {
             position: absolute;
             top: 20px;
@@ -168,7 +169,6 @@
             font-weight: 600;
         }
         
-        /* Photo saved notification */
         #photo-saved {
             position: absolute;
             top: 80px;
@@ -182,359 +182,172 @@
             font-weight: 600;
             z-index: 101;
             display: none;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
     </style>
 </head>
 <body>
-    <canvas id="canvas3d"></canvas>
-    
     <div id="loading">
         <div class="spinner"></div>
-        <div>Loading 3D Model...</div>
+        <div>Loading...</div>
     </div>
     
-    <button id="ar-button" disabled>View in AR</button>
-    <button id="photo-button">📸</button>
-    
-    <div class="instructions" id="instructions">🤏 Pinch • 👉 Drag</div>
-    <div class="ar-instructions" id="ar-instructions">Move phone to find floor • Tap to place</div>
-    <div id="photo-saved">Photo Saved! 📸</div>
-    
+    <canvas id="screenshot-canvas"></canvas>
     <div id="flash"></div>
     
     <script>
-        // Get URL parameters
+        let arSessionActive = false;
+        let lastARTime = 0;
+        const AR_COOLDOWN = 1000;
+        
         const urlParams = new URLSearchParams(window.location.search);
         const modelUrl = urlParams.get('model');
         const title = urlParams.get('title') || 'AR Item';
+        const loadingDiv = document.getElementById('loading');
         
         if (!modelUrl) {
-            document.getElementById('loading').innerHTML = 
-                '<div style="color: #FF9B82;">No 3D model provided</div>';
+            document.body.innerHTML = '<div id="loading" class="error">No model provided</div>';
         } else {
-            initAR();
-        }
-        
-        function initAR() {
-            // Three.js setup
-            let camera, scene, renderer;
-            let controller, reticle, model;
-            let hitTestSource = null;
-            let hitTestSourceRequested = false;
-            let arSessionActive = false;
-            let modelPlaced = false;
-            let lastARTime = 0;
-            const AR_COOLDOWN = 1000;
+            // Create model-viewer with optimized settings
+            document.body.innerHTML = 
+                '<model-viewer id="viewer" ' +
+                'src="' + decodeURIComponent(modelUrl) + '" ' +
+                'alt="' + decodeURIComponent(title) + '" ' +
+                'ar ' +
+                'ar-modes="webxr" ' +
+                'camera-controls ' +
+                'touch-action="pan-y" ' +
+                'auto-rotate ' +
+                'shadow-intensity="1" ' +
+                'camera-orbit="0deg 75deg 105%" ' +
+                'ar-scale="auto" ' +
+                'ar-placement="floor" ' +
+                'interaction-prompt="none" ' +
+                'loading="eager">' +
+                '<button slot="ar-button" id="ar-button">View in AR</button>' +
+                '</model-viewer>' +
+                '<button id="photo-button">📸</button>' +
+                '<div class="instructions" id="instructions">🤏 Pinch • 👉 Drag</div>' +
+                '<div class="ar-instructions" id="ar-instructions">👆 Tap floor to place • 📸 Tap button for photo</div>' +
+                '<div id="photo-saved">Photo Saved! 📸</div>' +
+                '<canvas id="screenshot-canvas"></canvas>' +
+                '<div id="flash"></div>' +
+                '<div id="loading"><div class="spinner"></div><div>Loading...</div></div>';
             
-            const canvas = document.getElementById('canvas3d');
-            const arButton = document.getElementById('ar-button');
-            const photoButton = document.getElementById('photo-button');
+            const viewer = document.getElementById('viewer');
             const loading = document.getElementById('loading');
             const instructions = document.getElementById('instructions');
             const arInstructions = document.getElementById('ar-instructions');
+            const arButton = document.getElementById('ar-button');
+            const photoButton = document.getElementById('photo-button');
             const photoSaved = document.getElementById('photo-saved');
             const flash = document.getElementById('flash');
+            const screenshotCanvas = document.getElementById('screenshot-canvas');
             
-            init();
+            viewer.addEventListener('load', function() {
+                console.log('✅ Model loaded');
+                loading.style.display = 'none';
+            });
             
-            function init() {
-                // Scene
-                scene = new THREE.Scene();
+            viewer.addEventListener('error', function(e) {
+                console.error('❌ Error:', e);
+                loading.innerHTML = '<div class="error">Failed to load</div>';
+            });
+            
+            viewer.addEventListener('progress', function(e) {
+                const percent = Math.round(e.detail.totalProgress * 100);
+                loading.querySelector('div:last-child').textContent = percent + '%';
+            });
+            
+            viewer.addEventListener('ar-status', function(e) {
+                console.log('AR:', e.detail.status);
                 
-                // Camera
-                camera = new THREE.PerspectiveCamera(
-                    70,
-                    window.innerWidth / window.innerHeight,
-                    0.01,
-                    20
-                );
-                
-                // Renderer with XR
-                renderer = new THREE.WebGLRenderer({ 
-                    canvas: canvas,
-                    antialias: true,
-                    alpha: true,
-                    preserveDrawingBuffer: true // ✅ Required for screenshots
-                });
-                renderer.setPixelRatio(window.devicePixelRatio);
-                renderer.setSize(window.innerWidth, window.innerHeight);
-                renderer.xr.enabled = true;
-                
-                // Lighting - improved for better visuals
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
-                scene.add(ambientLight);
-                
-                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-                directionalLight.position.set(1, 3, 2);
-                directionalLight.castShadow = true;
-                scene.add(directionalLight);
-                
-                // Reticle - placement indicator (glowing ring)
-                const reticleGeometry = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2);
-                const reticleMaterial = new THREE.MeshBasicMaterial({ 
-                    color: 0x0DF2DF,
-                    transparent: true,
-                    opacity: 0.8,
-                    side: THREE.DoubleSide
-                });
-                reticle = new THREE.Mesh(reticleGeometry, reticleMaterial);
-                reticle.matrixAutoUpdate = false;
-                reticle.visible = false;
-                scene.add(reticle);
-                
-                // Add pulsing animation to reticle
-                let reticleScale = 1;
-                let reticlePulse = 0.02;
-                setInterval(() => {
-                    if (reticle.visible) {
-                        reticleScale += reticlePulse;
-                        if (reticleScale > 1.2 || reticleScale < 0.8) {
-                            reticlePulse *= -1;
-                        }
-                        reticle.scale.set(reticleScale, 1, reticleScale);
-                    }
-                }, 50);
-                
-                // Controller (for select events)
-                controller = renderer.xr.getController(0);
-                controller.addEventListener('select', onSelect);
-                scene.add(controller);
-                
-                // Load model
-                const loader = new THREE.GLTFLoader();
-                loader.load(
-                    decodeURIComponent(modelUrl),
-                    function(gltf) {
-                        model = gltf.scene;
-                        model.visible = false;
-                        
-                        // Auto-scale model to reasonable size
-                        const box = new THREE.Box3().setFromObject(model);
-                        const size = box.getSize(new THREE.Vector3());
-                        const maxDim = Math.max(size.x, size.y, size.z);
-                        const scale = 0.5 / maxDim; // Target 0.5m
-                        model.scale.multiplyScalar(scale);
-                        
-                        scene.add(model);
-                        
-                        loading.style.display = 'none';
-                        arButton.disabled = false;
-                        console.log('✅ Model loaded and scaled');
-                    },
-                    function(progress) {
-                        const percent = Math.round((progress.loaded / progress.total) * 100);
-                        loading.querySelector('div:last-child').textContent = `Loading... ${percent}%`;
-                    },
-                    function(error) {
-                        console.error('❌ Model error:', error);
-                        loading.innerHTML = '<div style="color: #FF9B82;">Failed to load model</div>';
-                    }
-                );
-                
-                // AR Button
-                arButton.addEventListener('click', onARButtonClick);
-                
-                // Photo Button
-                photoButton.addEventListener('click', takePhoto);
-                
-                // Window resize
-                window.addEventListener('resize', onWindowResize);
-                
-                // Check WebXR support
-                if ('xr' in navigator) {
-                    navigator.xr.isSessionSupported('immersive-ar').then(function(supported) {
-                        if (supported) {
-                            console.log('✅ WebXR AR supported');
-                        } else {
-                            arButton.textContent = 'AR Not Supported';
-                            arButton.disabled = true;
-                        }
-                    });
-                } else {
-                    arButton.textContent = 'WebXR Not Available';
-                    arButton.disabled = true;
+                if (e.detail.status === 'not-presenting') {
+                    arSessionActive = false;
+                    instructions.style.display = 'block';
+                    arInstructions.style.display = 'none';
+                    photoButton.style.display = 'none';
+                } else if (e.detail.status === 'session-started') {
+                    arSessionActive = true;
+                    lastARTime = Date.now();
+                    instructions.style.display = 'none';
+                    arInstructions.style.display = 'block';
+                    photoButton.style.display = 'flex';
+                    console.log('🎉 AR Started!');
+                } else if (e.detail.status === 'failed') {
+                    arSessionActive = false;
+                    alert('AR failed. Try restarting Chrome');
                 }
-                
-                // Start render loop
-                renderer.setAnimationLoop(render);
-            }
+            });
             
-            function onARButtonClick() {
+            arButton.addEventListener('click', function(e) {
                 const now = Date.now();
-                const timeSinceLastAR = now - lastARTime;
-                
-                if (arSessionActive) {
-                    console.log('⚠️ AR already active');
-                    return;
+                if (arSessionActive || (now - lastARTime < AR_COOLDOWN && lastARTime > 0)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
                 }
-                
-                if (timeSinceLastAR < AR_COOLDOWN && lastARTime > 0) {
-                    alert('Please wait a moment');
-                    return;
-                }
-                
-                if (!model) {
-                    alert('Model not loaded yet');
-                    return;
-                }
-                
-                console.log('🚀 Starting AR session...');
-                
-                // Start AR session with hit-test
-                navigator.xr.requestSession('immersive-ar', {
-                    requiredFeatures: ['hit-test'],
-                    optionalFeatures: ['dom-overlay', 'light-estimation'],
-                    domOverlay: { root: document.body }
-                }).then(onSessionStarted).catch(function(error) {
-                    console.error('❌ AR failed:', error);
-                    alert('AR failed to start.\n\nMake sure:\n• Camera permissions granted\n• Using Chrome\n• ARCore installed');
-                });
-            }
+            });
             
-            function onSessionStarted(session) {
-                arSessionActive = true;
-                lastARTime = Date.now();
-                modelPlaced = false;
-                
-                session.addEventListener('end', onSessionEnded);
-                
-                renderer.xr.setReferenceSpaceType('local');
-                renderer.xr.setSession(session);
-                
-                instructions.style.display = 'none';
-                arInstructions.style.display = 'block';
-                arButton.style.display = 'none';
-                photoButton.style.display = 'flex';
-                
-                console.log('🎉 AR Started!');
-            }
-            
-            function onSessionEnded() {
-                arSessionActive = false;
-                hitTestSourceRequested = false;
-                hitTestSource = null;
-                modelPlaced = false;
-                
-                instructions.style.display = 'block';
-                arInstructions.style.display = 'none';
-                arButton.style.display = 'block';
-                photoButton.style.display = 'none';
-                
-                if (model) {
-                    model.visible = false;
-                }
-                reticle.visible = false;
-                
-                console.log('🔓 AR ended');
-            }
-            
-            function onSelect() {
-                // Place model at reticle position
-                if (reticle.visible && model && !modelPlaced) {
-                    model.position.setFromMatrixPosition(reticle.matrix);
-                    model.visible = true;
-                    modelPlaced = true;
-                    arInstructions.textContent = '📸 Tap camera button to take photo';
-                    console.log('✅ Model placed and anchored!');
-                }
-            }
-            
-            function takePhoto() {
+            // Photo capture using model-viewer's screenshot API
+            photoButton.addEventListener('click', async function() {
                 if (!arSessionActive) return;
                 
                 console.log('📸 Taking photo...');
                 
-                // Flash effect
-                flash.classList.add('active');
-                setTimeout(() => flash.classList.remove('active'), 200);
-                
-                // Capture canvas to image
                 try {
-                    canvas.toBlob(function(blob) {
-                        if (blob) {
-                            // Create download link
-                            const url = URL.createObjectURL(blob);
-                            const link = document.createElement('a');
-                            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                            link.download = `bubbawans-ar-${timestamp}.jpg`;
-                            link.href = url;
-                            link.click();
-                            
-                            // Show notification
-                            photoSaved.style.display = 'block';
-                            setTimeout(() => {
-                                photoSaved.style.display = 'none';
-                            }, 2000);
-                            
-                            // Try to share (if Web Share API available)
-                            if (navigator.share) {
+                    // Flash effect
+                    flash.classList.add('active');
+                    setTimeout(() => flash.classList.remove('active'), 200);
+                    
+                    // Use model-viewer's toBlob method
+                    const blob = await viewer.toBlob({
+                        idealAspect: true,
+                        mimeType: 'image/jpeg',
+                        qualityArgument: 0.95
+                    });
+                    
+                    if (blob) {
+                        // Create download link
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                        link.download = `bubbawans-ar-${timestamp}.jpg`;
+                        link.href = url;
+                        link.click();
+                        
+                        // Show notification
+                        photoSaved.style.display = 'block';
+                        setTimeout(() => photoSaved.style.display = 'none', 2000);
+                        
+                        // Try Web Share API
+                        if (navigator.share && navigator.canShare) {
+                            try {
                                 const file = new File([blob], link.download, { type: 'image/jpeg' });
-                                navigator.share({
-                                    title: 'Check out my AR view!',
-                                    text: 'Bubbawans AR Experience',
+                                const shareData = {
+                                    title: 'My AR Experience',
+                                    text: 'Check out my Bubbawans AR!',
                                     files: [file]
-                                }).catch(() => {
-                                    console.log('Share cancelled');
-                                });
+                                };
+                                
+                                if (navigator.canShare(shareData)) {
+                                    await navigator.share(shareData);
+                                }
+                            } catch (err) {
+                                console.log('Share cancelled or failed');
                             }
-                            
-                            console.log('✅ Photo saved!');
                         }
-                    }, 'image/jpeg', 0.95);
+                        
+                        console.log('✅ Photo saved!');
+                    }
                 } catch (error) {
                     console.error('❌ Photo failed:', error);
-                    alert('Failed to take photo');
+                    alert('Failed to capture photo. Try again.');
                 }
-            }
+            });
             
-            function onWindowResize() {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            }
-            
-            function render(timestamp, frame) {
-                if (frame && arSessionActive) {
-                    const referenceSpace = renderer.xr.getReferenceSpace();
-                    const session = renderer.xr.getSession();
-                    
-                    // Request hit test source once
-                    if (!hitTestSourceRequested) {
-                        session.requestReferenceSpace('viewer').then(function(referenceSpace) {
-                            session.requestHitTestSource({ space: referenceSpace }).then(function(source) {
-                                hitTestSource = source;
-                                console.log('✅ Hit-test source ready');
-                            });
-                        });
-                        hitTestSourceRequested = true;
-                    }
-                    
-                    // Perform hit test
-                    if (hitTestSource && !modelPlaced) {
-                        const hitTestResults = frame.getHitTestResults(hitTestSource);
-                        
-                        if (hitTestResults.length > 0) {
-                            const hit = hitTestResults[0];
-                            const pose = hit.getPose(referenceSpace);
-                            
-                            // Update reticle position
-                            reticle.visible = true;
-                            reticle.matrix.fromArray(pose.transform.matrix);
-                            
-                            // Update instructions
-                            arInstructions.textContent = '👆 Tap screen to place';
-                        } else {
-                            reticle.visible = false;
-                            arInstructions.textContent = '📱 Move phone to find floor';
-                        }
-                    } else if (modelPlaced) {
-                        reticle.visible = false;
-                    }
-                }
-                
-                renderer.render(scene, camera);
-            }
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) arSessionActive = false;
+            });
         }
     </script>
 </body>
