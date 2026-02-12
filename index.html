@@ -47,10 +47,21 @@
             cursor: pointer;
             z-index: 1000;
             box-shadow: 0 8px 30px rgba(13, 242, 223, 0.6);
+            transition: all 0.3s ease;
         }
         
         button[slot="ar-button"]:active {
             transform: translateX(-50%) scale(0.95);
+        }
+        
+        /* Pulsing animation when ready */
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 8px 30px rgba(13, 242, 223, 0.6); }
+            50% { box-shadow: 0 8px 40px rgba(13, 242, 223, 0.9); }
+        }
+        
+        button[slot="ar-button"].ready {
+            animation: pulse 2s ease-in-out infinite;
         }
         
         /* Loading State */
@@ -94,7 +105,7 @@
             bottom: 200px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.8);
             color: white;
             padding: 12px 20px;
             border-radius: 12px;
@@ -111,15 +122,33 @@
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.9);
             color: white;
-            padding: 12px 24px;
+            padding: 15px 25px;
             border-radius: 30px;
-            font-size: 14px;
+            font-size: 15px;
             text-align: center;
             max-width: 90%;
             backdrop-filter: blur(10px);
             z-index: 100;
+            display: none;
+            font-weight: 600;
+        }
+        
+        /* Ready indicator */
+        .ready-indicator {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(13, 242, 223, 0.2);
+            border: 2px solid #0DF2DF;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 95;
             display: none;
         }
     </style>
@@ -134,13 +163,13 @@
         // Session management
         let arSessionActive = false;
         let lastARTime = 0;
-        const AR_COOLDOWN = 1000; // 1 second cooldown between AR attempts
+        const AR_COOLDOWN = 1000;
         
         // Get parameters from URL
         const urlParams = new URLSearchParams(window.location.search);
         const modelUrl = urlParams.get('model');
         const title = urlParams.get('title') || 'AR Item';
-        const autoAR = urlParams.get('autoAR') === 'true';
+        // ❌ REMOVED autoAR - let user click manually for reliability
         
         const loadingDiv = document.getElementById('loading');
         
@@ -152,7 +181,7 @@
                 'No 3D model provided.' +
                 '</div></div>';
         } else {
-            // WEBXR ONLY
+            // ✅ WEBXR ONLY with proper anchoring features
             document.body.innerHTML = 
                 '<model-viewer id="viewer" src="' + decodeURIComponent(modelUrl) + '" ' +
                 'alt="' + decodeURIComponent(title) + '" ' +
@@ -164,11 +193,13 @@
                 'max-camera-orbit="auto auto 400%" ' +
                 'ar-scale="auto" ' +
                 'ar-placement="floor" ' +
-                'interaction-prompt="none">' +
+                'interaction-prompt="none" ' +
+                'xr-environment>' + // ✅ Enable XR environment for better tracking
                 '<button slot="ar-button" id="ar-button">View in AR</button>' +
                 '</model-viewer>' +
                 '<div class="instructions" id="instructions">🤏 Pinch to zoom • 👉 Drag to rotate</div>' +
-                '<div class="ar-instructions" id="ar-instructions">👆 Tap to place • 🤏 Pinch to resize • 👉 Drag to move</div>' +
+                '<div class="ready-indicator" id="ready-indicator">✅ AR Ready - Tap button below</div>' +
+                '<div class="ar-instructions" id="ar-instructions">👆 Tap floor to place • 🤏 Pinch to resize • 👉 Drag to rotate</div>' +
                 '<div id="loading"><div class="spinner"></div><div>Loading Model...</div></div>';
             
             const viewer = document.getElementById('viewer');
@@ -176,6 +207,7 @@
             const instructions = document.getElementById('instructions');
             const arInstructions = document.getElementById('ar-instructions');
             const arButton = document.getElementById('ar-button');
+            const readyIndicator = document.getElementById('ready-indicator');
             
             viewer.addEventListener('load', function() {
                 console.log('✅ Model loaded');
@@ -186,13 +218,15 @@
                     if (viewer.canActivateAR) {
                         console.log('✅ WebXR AR supported');
                         
-                        // Auto-trigger AR if requested
-                        if (autoAR) {
-                            console.log('🚀 Auto-triggering AR in 1000ms...');
-                            setTimeout(() => {
-                                tryActivateAR();
-                            }, 1000);
-                        }
+                        // ✅ Visual feedback that AR is ready
+                        arButton.classList.add('ready');
+                        readyIndicator.style.display = 'block';
+                        
+                        // Hide ready indicator after 3 seconds
+                        setTimeout(() => {
+                            readyIndicator.style.display = 'none';
+                        }, 3000);
+                        
                     } else {
                         console.warn('⚠️ WebXR AR not supported');
                         arButton.textContent = 'AR Not Available';
@@ -216,7 +250,7 @@
                 }
             });
             
-            // AR session events with proper cleanup
+            // AR session events
             viewer.addEventListener('ar-status', function(event) {
                 console.log('📍 AR Status:', event.detail.status);
                 
@@ -224,46 +258,27 @@
                     arSessionActive = false;
                     instructions.style.display = 'block';
                     arInstructions.style.display = 'none';
-                    console.log('🔓 AR session ended, camera released');
+                    readyIndicator.style.display = 'none';
+                    console.log('🔓 AR session ended');
                 } else if (event.detail.status === 'session-started') {
                     arSessionActive = true;
                     lastARTime = Date.now();
                     instructions.style.display = 'none';
                     arInstructions.style.display = 'block';
-                    console.log('🎉 AR Session Started!');
+                    readyIndicator.style.display = 'none';
+                    console.log('🎉 AR Session Started with floor tracking!');
                 } else if (event.detail.status === 'failed') {
                     arSessionActive = false;
                     console.error('❌ AR Failed');
                     
-                    // Check if it's a cooldown issue
                     const timeSinceLastAR = Date.now() - lastARTime;
                     if (timeSinceLastAR < AR_COOLDOWN) {
-                        alert('Please wait a moment before trying AR again.\n\nThe camera needs time to fully release from the previous session.');
+                        alert('Please wait a moment before trying AR again.');
                     } else {
-                        alert('AR failed to start.\n\nTry:\n1. Close and reopen this page\n2. Restart Chrome\n3. Restart your phone if issue persists');
+                        alert('AR failed to start.\n\nTry:\n1. Grant camera permissions\n2. Close and reopen this page\n3. Restart Chrome if issue persists');
                     }
                 }
             });
-            
-            // Safe AR activation with cooldown
-            function tryActivateAR() {
-                const now = Date.now();
-                const timeSinceLastAR = now - lastARTime;
-                
-                if (arSessionActive) {
-                    console.log('⚠️ AR session already active');
-                    return;
-                }
-                
-                if (timeSinceLastAR < AR_COOLDOWN && lastARTime > 0) {
-                    console.log('⏳ AR cooldown active, please wait...');
-                    setTimeout(tryActivateAR, AR_COOLDOWN - timeSinceLastAR);
-                    return;
-                }
-                
-                console.log('🎯 Activating AR...');
-                arButton.click();
-            }
             
             // AR button click with safety check
             if (arButton) {
@@ -272,47 +287,37 @@
                     const timeSinceLastAR = now - lastARTime;
                     
                     if (arSessionActive) {
-                        console.log('⚠️ AR session already active, ignoring click');
+                        console.log('⚠️ AR session already active');
                         e.preventDefault();
                         e.stopPropagation();
                         return false;
                     }
                     
                     if (timeSinceLastAR < AR_COOLDOWN && lastARTime > 0) {
-                        console.log('⏳ AR cooldown active, please wait');
+                        console.log('⏳ AR cooldown active');
                         alert('Please wait a moment before trying AR again.');
                         e.preventDefault();
                         e.stopPropagation();
                         return false;
                     }
                     
-                    console.log('🚀 AR button clicked - launching WebXR');
+                    console.log('🚀 AR button clicked - launching WebXR with floor tracking');
                 });
             }
             
-            // Page visibility - cleanup on page hide
+            // Page visibility - cleanup
             document.addEventListener('visibilitychange', function() {
                 if (document.hidden) {
-                    console.log('📴 Page hidden, marking AR session as inactive');
+                    console.log('📴 Page hidden');
                     arSessionActive = false;
                 }
             });
             
-            // Cleanup on page unload
+            // Cleanup on unload
             window.addEventListener('beforeunload', function() {
-                console.log('🧹 Page unloading, cleaning up AR session');
+                console.log('🧹 Cleaning up');
                 arSessionActive = false;
             });
-            
-            // Timeout fallback
-            setTimeout(function() {
-                if (loading.style.display !== 'none') {
-                    const loadingText = loading.querySelector('div:last-child');
-                    if (loadingText) {
-                        loadingText.innerHTML = 'Still loading...<br>Large file may take time.';
-                    }
-                }
-            }, 10000);
         }
     </script>
 </body>
