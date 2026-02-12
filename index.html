@@ -189,7 +189,6 @@
     
     <div id="flash"></div>
     
-    <!-- Three.js ES6 Modules -->
     <script type="importmap">
     {
         "imports": {
@@ -202,8 +201,8 @@
     <script type="module">
         import * as THREE from 'three';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         
-        // Get URL parameters
         const urlParams = new URLSearchParams(window.location.search);
         const modelUrl = urlParams.get('model');
         const title = urlParams.get('title') || 'AR Item';
@@ -216,7 +215,7 @@
         }
         
         function initAR() {
-            let camera, scene, renderer;
+            let camera, scene, renderer, controls;
             let controller, reticle, model;
             let hitTestSource = null;
             let hitTestSourceRequested = false;
@@ -238,6 +237,7 @@
             
             function init() {
                 scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x0a0a0a);
                 
                 camera = new THREE.PerspectiveCamera(
                     70,
@@ -245,23 +245,32 @@
                     0.01,
                     20
                 );
+                camera.position.set(0, 0.5, 1.5);
                 
                 renderer = new THREE.WebGLRenderer({ 
                     canvas: canvas,
                     antialias: true,
-                    alpha: true,
+                    alpha: false,
                     preserveDrawingBuffer: true
                 });
                 renderer.setPixelRatio(window.devicePixelRatio);
                 renderer.setSize(window.innerWidth, window.innerHeight);
                 renderer.xr.enabled = true;
                 
+                // Lighting for preview
                 const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
                 scene.add(ambientLight);
                 
-                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
                 directionalLight.position.set(1, 3, 2);
                 scene.add(directionalLight);
+                
+                // OrbitControls for 3D preview
+                controls = new OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+                controls.minDistance = 0.5;
+                controls.maxDistance = 5;
                 
                 // Reticle - cyan ring
                 const reticleGeometry = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2);
@@ -280,7 +289,7 @@
                 let reticleScale = 1;
                 let reticlePulse = 0.02;
                 setInterval(() => {
-                    if (reticle.visible) {
+                    if (reticle.visible && arSessionActive) {
                         reticleScale += reticlePulse;
                         if (reticleScale > 1.2 || reticleScale < 0.8) {
                             reticlePulse *= -1;
@@ -299,7 +308,6 @@
                     decodeURIComponent(modelUrl),
                     function(gltf) {
                         model = gltf.scene;
-                        model.visible = false;
                         
                         // Auto-scale
                         const box = new THREE.Box3().setFromObject(model);
@@ -308,10 +316,19 @@
                         const scale = 0.5 / maxDim;
                         model.scale.multiplyScalar(scale);
                         
+                        // Center model
+                        box.setFromObject(model);
+                        const center = box.getCenter(new THREE.Vector3());
+                        model.position.sub(center);
+                        
                         scene.add(model);
                         
                         loading.style.display = 'none';
                         arButton.disabled = false;
+                        
+                        // Start preview animation
+                        model.rotation.y = 0;
+                        
                         console.log('✅ Model loaded');
                     },
                     function(progress) {
@@ -320,7 +337,7 @@
                     },
                     function(error) {
                         console.error('❌ Error:', error);
-                        loading.innerHTML = '<div style="color: #FF9B82;">Failed to load model</div>';
+                        loading.innerHTML = '<div style="color: #FF9B82;">Failed to load model<br>Check URL</div>';
                     }
                 );
                 
@@ -340,123 +357,23 @@
                     arButton.disabled = true;
                 }
                 
+                // Start render loop
+                animate();
+            }
+            
+            function animate() {
                 renderer.setAnimationLoop(render);
             }
             
-            function onARButtonClick() {
-                const now = Date.now();
-                const timeSinceLastAR = now - lastARTime;
-                
-                if (arSessionActive) return;
-                if (timeSinceLastAR < AR_COOLDOWN && lastARTime > 0) {
-                    alert('Please wait');
-                    return;
-                }
-                if (!model) {
-                    alert('Model not loaded');
-                    return;
-                }
-                
-                navigator.xr.requestSession('immersive-ar', {
-                    requiredFeatures: ['hit-test'],
-                    optionalFeatures: ['dom-overlay'],
-                    domOverlay: { root: document.body }
-                }).then(onSessionStarted).catch(function(error) {
-                    console.error('❌ AR failed:', error);
-                    alert('AR failed. Check permissions.');
-                });
-            }
-            
-            function onSessionStarted(session) {
-                arSessionActive = true;
-                lastARTime = Date.now();
-                modelPlaced = false;
-                
-                session.addEventListener('end', onSessionEnded);
-                renderer.xr.setReferenceSpaceType('local');
-                renderer.xr.setSession(session);
-                
-                instructions.style.display = 'none';
-                arInstructions.style.display = 'block';
-                arButton.style.display = 'none';
-                photoButton.style.display = 'flex';
-                
-                console.log('🎉 AR Started!');
-            }
-            
-            function onSessionEnded() {
-                arSessionActive = false;
-                hitTestSourceRequested = false;
-                hitTestSource = null;
-                modelPlaced = false;
-                
-                instructions.style.display = 'block';
-                arInstructions.style.display = 'none';
-                arButton.style.display = 'block';
-                photoButton.style.display = 'none';
-                
-                if (model) model.visible = false;
-                reticle.visible = false;
-                
-                console.log('🔓 AR ended');
-            }
-            
-            function onSelect() {
-                if (reticle.visible && model && !modelPlaced) {
-                    model.position.setFromMatrixPosition(reticle.matrix);
-                    model.visible = true;
-                    modelPlaced = true;
-                    arInstructions.textContent = '📸 Tap camera to capture!';
-                    console.log('✅ Placed!');
-                }
-            }
-            
-            function takePhoto() {
-                if (!arSessionActive) return;
-                
-                console.log('📸 Taking photo...');
-                
-                flash.classList.add('active');
-                setTimeout(() => flash.classList.remove('active'), 200);
-                
-                try {
-                    canvas.toBlob(function(blob) {
-                        if (blob) {
-                            const url = URL.createObjectURL(blob);
-                            const link = document.createElement('a');
-                            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-                            link.download = `bubbawans-ar-${timestamp}.jpg`;
-                            link.href = url;
-                            link.click();
-                            
-                            photoSaved.style.display = 'block';
-                            setTimeout(() => photoSaved.style.display = 'none', 2000);
-                            
-                            if (navigator.share) {
-                                const file = new File([blob], link.download, { type: 'image/jpeg' });
-                                navigator.share({
-                                    title: 'My AR Experience',
-                                    text: 'Bubbawans AR!',
-                                    files: [file]
-                                }).catch(() => {});
-                            }
-                            
-                            console.log('✅ Photo saved!');
-                        }
-                    }, 'image/jpeg', 0.95);
-                } catch (error) {
-                    console.error('❌ Photo failed:', error);
-                    alert('Photo failed');
-                }
-            }
-            
-            function onWindowResize() {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            }
-            
             function render(timestamp, frame) {
+                // 3D Preview mode (before AR)
+                if (!arSessionActive && model) {
+                    controls.update();
+                    model.rotation.y += 0.005; // Auto-rotate
+                    renderer.render(scene, camera);
+                }
+                
+                // AR mode
                 if (frame && arSessionActive) {
                     const referenceSpace = renderer.xr.getReferenceSpace();
                     const session = renderer.xr.getSession();
@@ -488,9 +405,155 @@
                     } else if (modelPlaced) {
                         reticle.visible = false;
                     }
+                    
+                    renderer.render(scene, camera);
+                }
+            }
+            
+            function onARButtonClick() {
+                const now = Date.now();
+                const timeSinceLastAR = now - lastARTime;
+                
+                if (arSessionActive) return;
+                if (timeSinceLastAR < AR_COOLDOWN && lastARTime > 0) {
+                    alert('Please wait a moment');
+                    return;
+                }
+                if (!model) {
+                    alert('Model not loaded yet');
+                    return;
                 }
                 
-                renderer.render(scene, camera);
+                console.log('🚀 Starting AR...');
+                
+                navigator.xr.requestSession('immersive-ar', {
+                    requiredFeatures: ['hit-test'],
+                    optionalFeatures: ['dom-overlay'],
+                    domOverlay: { root: document.body }
+                }).then(onSessionStarted).catch(function(error) {
+                    console.error('❌ AR failed:', error);
+                    alert('AR failed. Check camera permissions.');
+                });
+            }
+            
+            function onSessionStarted(session) {
+                arSessionActive = true;
+                lastARTime = Date.now();
+                modelPlaced = false;
+                
+                session.addEventListener('end', onSessionEnded);
+                renderer.xr.setReferenceSpaceType('local');
+                renderer.xr.setSession(session);
+                
+                // Disable controls in AR
+                controls.enabled = false;
+                
+                // Hide model until placed
+                model.visible = false;
+                
+                instructions.style.display = 'none';
+                arInstructions.style.display = 'block';
+                arButton.style.display = 'none';
+                // ❌ DON'T show photo button yet - only after placing!
+                
+                console.log('🎉 AR Started!');
+            }
+            
+            function onSessionEnded() {
+                arSessionActive = false;
+                hitTestSourceRequested = false;
+                hitTestSource = null;
+                modelPlaced = false;
+                
+                // Re-enable controls
+                controls.enabled = true;
+                
+                instructions.style.display = 'block';
+                arInstructions.style.display = 'none';
+                arButton.style.display = 'block';
+                photoButton.style.display = 'none';
+                
+                model.visible = true;
+                model.position.set(0, 0, 0); // Reset position
+                reticle.visible = false;
+                
+                console.log('🔓 AR ended');
+            }
+            
+            function onSelect() {
+                if (reticle.visible && model && !modelPlaced) {
+                    model.position.setFromMatrixPosition(reticle.matrix);
+                    model.visible = true;
+                    modelPlaced = true;
+                    
+                    // ✅ NOW show photo button!
+                    photoButton.style.display = 'flex';
+                    arInstructions.textContent = '📸 Tap camera button to capture!';
+                    
+                    console.log('✅ Model placed!');
+                }
+            }
+            
+            function takePhoto() {
+                if (!arSessionActive || !modelPlaced) {
+                    console.log('⚠️ Not ready for photo');
+                    return;
+                }
+                
+                console.log('📸 Taking photo...');
+                
+                // Flash effect
+                flash.classList.add('active');
+                setTimeout(() => flash.classList.remove('active'), 200);
+                
+                // Wait a frame to ensure render is complete
+                setTimeout(() => {
+                    try {
+                        canvas.toBlob(function(blob) {
+                            if (blob) {
+                                const url = URL.createObjectURL(blob);
+                                const link = document.createElement('a');
+                                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                                link.download = `bubbawans-ar-${timestamp}.jpg`;
+                                link.href = url;
+                                link.click();
+                                
+                                photoSaved.style.display = 'block';
+                                setTimeout(() => photoSaved.style.display = 'none', 2000);
+                                
+                                // Try to share
+                                if (navigator.share && navigator.canShare) {
+                                    const file = new File([blob], link.download, { type: 'image/jpeg' });
+                                    const shareData = {
+                                        title: 'My AR Experience',
+                                        text: 'Check out my Bubbawans AR!',
+                                        files: [file]
+                                    };
+                                    
+                                    if (navigator.canShare(shareData)) {
+                                        navigator.share(shareData).catch(() => {
+                                            console.log('Share cancelled');
+                                        });
+                                    }
+                                }
+                                
+                                console.log('✅ Photo saved!');
+                            } else {
+                                console.error('❌ Blob is null');
+                                alert('Photo capture failed. Try again.');
+                            }
+                        }, 'image/jpeg', 0.95);
+                    } catch (error) {
+                        console.error('❌ Photo error:', error);
+                        alert('Photo failed. Try again.');
+                    }
+                }, 100);
+            }
+            
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
             }
         }
     </script>
