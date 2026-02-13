@@ -29,30 +29,78 @@
             display: block;
         }
         
+        /* Close button - shared */
+        .close-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 44px;
+            height: 44px;
+            border-radius: 22px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(13, 242, 223, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 2000;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            transition: all 0.2s ease;
+        }
+        
+        .close-button:hover {
+            transform: scale(1.1);
+            border-color: #0DF2DF;
+            background: rgba(0, 0, 0, 0.9);
+        }
+        
+        .close-button svg {
+            width: 24px;
+            height: 24px;
+            fill: none;
+            stroke: #0DF2DF;
+            stroke-width: 2.5;
+            stroke-linecap: round;
+        }
+        
+        /* AR Button - Enhanced */
         #ar-button {
             position: absolute;
-            bottom: 120px;
+            bottom: 40px;
             left: 50%;
             transform: translateX(-50%);
             background: linear-gradient(135deg, #0DF2DF, #0AC5B8);
             border: none;
             color: white;
-            padding: 20px 50px;
-            border-radius: 30px;
+            padding: 18px 48px;
+            border-radius: 40px;
             font-size: 20px;
             font-weight: bold;
             cursor: pointer;
             z-index: 1000;
             box-shadow: 0 8px 30px rgba(13, 242, 223, 0.6);
+            letter-spacing: 1px;
+            transition: all 0.2s ease;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            min-width: 220px;
         }
         
         #ar-button:active {
             transform: translateX(-50%) scale(0.95);
+            box-shadow: 0 4px 20px rgba(13, 242, 223, 0.8);
         }
         
         #ar-button:disabled {
             opacity: 0.5;
             background: #666;
+            box-shadow: none;
+        }
+        
+        #ar-button.preview-mode {
+            bottom: 40px;
+            background: linear-gradient(135deg, #9D4EED, #7B2CBF);
+            box-shadow: 0 8px 30px rgba(157, 78, 237, 0.6);
         }
         
         #photo-button {
@@ -122,21 +170,7 @@
             100% { transform: rotate(360deg); }
         }
         
-        .instructions {
-            position: absolute;
-            bottom: 200px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 12px 20px;
-            border-radius: 12px;
-            font-size: 14px;
-            text-align: center;
-            max-width: 90%;
-            backdrop-filter: blur(10px);
-            z-index: 90;
-        }
+        /* Removed pinch/drag instructions */
         
         .ar-instructions {
             position: absolute;
@@ -170,20 +204,67 @@
             z-index: 101;
             display: none;
         }
+        
+        /* Item name display */
+        #item-title {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 12px 30px;
+            border-radius: 30px;
+            font-size: 18px;
+            font-weight: 600;
+            z-index: 1000;
+            border: 2px solid rgba(13, 242, 223, 0.5);
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+            max-width: 80%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* AR mode close button - special styling */
+        #ar-close-button {
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: rgba(0, 0, 0, 0.6);
+        }
+        
+        #ar-close-button svg {
+            stroke: white;
+        }
     </style>
 </head>
 <body>
     <canvas id="canvas3d"></canvas>
+    
+    <!-- Close button for preview mode -->
+    <div class="close-button" id="preview-close-button">
+        <svg viewBox="0 0 24 24">
+            <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
+    </div>
+    
+    <!-- Close button for AR mode (initially hidden) -->
+    <div class="close-button" id="ar-close-button" style="display: none;">
+        <svg viewBox="0 0 24 24">
+            <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
+    </div>
     
     <div id="loading">
         <div class="spinner"></div>
         <div>Loading 3D Model...</div>
     </div>
     
+    <div id="item-title"></div>
+    
     <button id="ar-button" disabled>View in AR</button>
     <button id="photo-button">📸</button>
     
-    <div class="instructions" id="instructions">🤏 Pinch • 👉 Drag</div>
     <div class="ar-instructions" id="ar-instructions">Move phone to find floor</div>
     <div id="photo-saved">Photo Saved! 📸</div>
     
@@ -206,6 +287,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         const modelUrl = urlParams.get('model');
         const title = urlParams.get('title') || 'AR Item';
+        const autoAR = urlParams.get('autoAR') === 'true';
         
         if (!modelUrl) {
             document.getElementById('loading').innerHTML = 
@@ -228,12 +310,40 @@
             const arButton = document.getElementById('ar-button');
             const photoButton = document.getElementById('photo-button');
             const loading = document.getElementById('loading');
-            const instructions = document.getElementById('instructions');
             const arInstructions = document.getElementById('ar-instructions');
             const photoSaved = document.getElementById('photo-saved');
             const flash = document.getElementById('flash');
+            const itemTitle = document.getElementById('item-title');
+            const previewCloseButton = document.getElementById('preview-close-button');
+            const arCloseButton = document.getElementById('ar-close-button');
+            
+            // Set item title
+            itemTitle.textContent = title;
             
             init();
+            
+            // Close button handlers
+            previewCloseButton.addEventListener('click', () => {
+                // Return to app - close the webview/tab
+                if (window.ReactNativeWebView) {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'CLOSE_AR' }));
+                } else {
+                    // Fallback for browser
+                    window.close();
+                }
+            });
+            
+            arCloseButton.addEventListener('click', () => {
+                if (arSessionActive) {
+                    renderer.xr.getSession().end();
+                } else {
+                    if (window.ReactNativeWebView) {
+                        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'CLOSE_AR' }));
+                    } else {
+                        window.close();
+                    }
+                }
+            });
             
             function init() {
                 scene = new THREE.Scene();
@@ -330,6 +440,11 @@
                         model.rotation.y = 0;
                         
                         console.log('✅ Model loaded');
+                        
+                        // Auto-start AR if requested
+                        if (autoAR) {
+                            setTimeout(() => onARButtonClick(), 500);
+                        }
                     },
                     function(progress) {
                         const percent = Math.round((progress.loaded / progress.total) * 100);
@@ -451,10 +566,17 @@
                 // Hide model until placed
                 model.visible = false;
                 
-                instructions.style.display = 'none';
-                arInstructions.style.display = 'block';
+                // Update UI for AR mode
                 arButton.style.display = 'none';
-                // ❌ DON'T show photo button yet - only after placing!
+                previewCloseButton.style.display = 'none';
+                arCloseButton.style.display = 'flex';
+                itemTitle.style.opacity = '0.5';
+                
+                // Show instructions
+                arInstructions.style.display = 'block';
+                
+                // Photo button remains hidden until placement
+                photoButton.style.display = 'none';
                 
                 console.log('🎉 AR Started!');
             }
@@ -468,10 +590,13 @@
                 // Re-enable controls
                 controls.enabled = true;
                 
-                instructions.style.display = 'block';
-                arInstructions.style.display = 'none';
+                // Restore UI for preview mode
                 arButton.style.display = 'block';
+                previewCloseButton.style.display = 'flex';
+                arCloseButton.style.display = 'none';
+                arInstructions.style.display = 'none';
                 photoButton.style.display = 'none';
+                itemTitle.style.opacity = '1';
                 
                 model.visible = true;
                 model.position.set(0, 0, 0); // Reset position
@@ -486,9 +611,8 @@
                     model.visible = true;
                     modelPlaced = true;
                     
-                    // ✅ NOW show photo button!
-                    photoButton.style.display = 'flex';
-                    arInstructions.textContent = '📸 Tap camera button to capture!';
+                    // Photo button removed - not showing anymore
+                    // arInstructions.textContent = 'Model placed!';
                     
                     console.log('✅ Model placed!');
                 }
