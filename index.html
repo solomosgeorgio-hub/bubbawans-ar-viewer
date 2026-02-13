@@ -71,7 +71,7 @@
         auto-rotate
         ar
         ar-modes="webxr scene-viewer quick-look"
-        ar-scale="auto"
+        ar-placement="floor"
         shadow-intensity="1"
         exposure="1"
         shadow-softness="0.8">
@@ -90,6 +90,7 @@
         
         const viewer = document.getElementById('viewer');
         const loading = document.getElementById('loading');
+        const arButton = document.getElementById('ar-button');
         
         if (!modelUrl) {
             loading.innerHTML = 'No model URL provided';
@@ -97,21 +98,33 @@
             viewer.setAttribute('src', decodeURIComponent(modelUrl));
             viewer.setAttribute('alt', decodeURIComponent(title));
             
-            // Hide loading when ready
-            viewer.addEventListener('load', () => {
-                loading.style.display = 'none';
+            // ✅ If autoAR, hide everything and go straight to AR
+            if (autoAR) {
+                // Hide the preview screen
+                viewer.style.display = 'none';
+                loading.innerHTML = 'Launching AR...';
                 
-                // ✅ If autoAR=true, automatically launch AR
-                if (autoAR) {
+                // Launch AR immediately when model loads
+                viewer.addEventListener('load', () => {
+                    // Small delay to ensure model is ready
                     setTimeout(() => {
                         viewer.activateAR();
-                    }, 500);
-                }
-            });
-            
-            viewer.addEventListener('error', () => {
-                loading.innerHTML = 'Failed to load model';
-            });
+                    }, 100);
+                }, { once: true });
+                
+                viewer.addEventListener('error', () => {
+                    loading.innerHTML = 'Failed to load model';
+                });
+            } else {
+                // Normal mode - show preview with AR button
+                viewer.addEventListener('load', () => {
+                    loading.style.display = 'none';
+                });
+                
+                viewer.addEventListener('error', () => {
+                    loading.innerHTML = 'Failed to load model';
+                });
+            }
         }
     </script>
 </body>
