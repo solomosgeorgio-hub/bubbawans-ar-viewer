@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AR Viewer</title>
     <script type="module" src="https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
     <style>
@@ -13,7 +13,6 @@
             height: 100%;
             overflow: hidden;
             background: #000;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
         
         model-viewer {
@@ -30,150 +29,71 @@
             color: white;
             font-size: 18px;
             text-align: center;
-            z-index: 1;
-        }
-        
-        /* Close button */
-        #closeButton {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 44px;
-            height: 44px;
-            background: rgba(0, 0, 0, 0.6);
-            border: 2px solid rgba(255, 255, 255, 0.8);
-            border-radius: 22px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            z-index: 1000;
-            backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
-        }
-        
-        #closeButton:hover {
-            background: rgba(0, 0, 0, 0.8);
-            transform: scale(1.1);
-        }
-        
-        #closeButton:active {
-            transform: scale(0.95);
-        }
-        
-        #closeButton svg {
-            width: 24px;
-            height: 24px;
-            stroke: white;
-            stroke-width: 3;
-            stroke-linecap: round;
-        }
-        
-        /* AR button styling */
-        .ar-button {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: linear-gradient(135deg, #0DF2DF, #0AC5B8);
-            border: none;
-            color: white;
-            padding: 14px 28px;
-            border-radius: 28px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 0 4px 16px rgba(13, 242, 223, 0.4);
-            transition: all 0.3s ease;
-            z-index: 100;
-        }
-        
-        .ar-button:hover {
-            transform: translateX(-50%) translateY(-2px);
-            box-shadow: 0 6px 20px rgba(13, 242, 223, 0.6);
-        }
-        
-        .ar-button:active {
-            transform: translateX(-50%) translateY(0);
         }
     </style>
 </head>
 <body>
-    <div id="loading">Loading 3D Model...</div>
-    
-    <!-- Close Button -->
-    <button id="closeButton" onclick="closeViewer()">
-        <svg viewBox="0 0 24 24" fill="none">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-    </button>
+    <div id="loading">Loading...</div>
     
     <script>
-        // Get URL parameters
         const urlParams = new URLSearchParams(window.location.search);
         const modelUrl = urlParams.get('model');
         const title = urlParams.get('title') || 'AR Item';
         const autoAR = urlParams.get('autoAR') === 'true';
         
-        // Close viewer function
-        function closeViewer() {
-            // Try to close the window/tab
-            if (window.opener) {
-                window.close();
-            } else {
-                // If opened directly, try to go back
-                if (window.history.length > 1) {
-                    window.history.back();
-                } else {
-                    // Last resort - close or show message
-                    window.close();
-                }
-            }
-        }
-        
         if (!modelUrl) {
             document.getElementById('loading').innerHTML = 'No model URL provided';
         } else {
-            // Create model viewer
-            const modelViewer = document.createElement('model-viewer');
-            modelViewer.setAttribute('src', decodeURIComponent(modelUrl));
-            modelViewer.setAttribute('alt', decodeURIComponent(title));
-            modelViewer.setAttribute('ar', '');
-            modelViewer.setAttribute('ar-modes', 'webxr scene-viewer quick-look');
-            modelViewer.setAttribute('camera-controls', '');
-            modelViewer.setAttribute('touch-action', 'pan-y');
-            modelViewer.setAttribute('auto-rotate', '');
-            modelViewer.setAttribute('shadow-intensity', '1');
-            modelViewer.setAttribute('ar-placement', 'floor');
-            modelViewer.setAttribute('loading', 'eager');
-            
-            // Add AR button
-            const arButton = document.createElement('button');
-            arButton.setAttribute('slot', 'ar-button');
-            arButton.className = 'ar-button';
-            arButton.textContent = 'View in AR';
-            modelViewer.appendChild(arButton);
-            
-            document.body.appendChild(modelViewer);
-            
-            // Hide loading when ready
-            modelViewer.addEventListener('load', () => {
-                document.getElementById('loading').style.display = 'none';
-            });
-            
-            modelViewer.addEventListener('error', () => {
-                document.getElementById('loading').innerHTML = 'Failed to load model';
-            });
-            
-            // Auto-launch AR if requested
+            // If autoAR=true, IMMEDIATELY trigger AR without showing preview
             if (autoAR) {
+                // Create hidden model-viewer just to trigger AR
+                const modelViewer = document.createElement('model-viewer');
+                modelViewer.setAttribute('src', decodeURIComponent(modelUrl));
+                modelViewer.setAttribute('alt', decodeURIComponent(title));
+                modelViewer.setAttribute('ar', '');
+                modelViewer.setAttribute('ar-modes', 'scene-viewer quick-look');
+                modelViewer.setAttribute('ar-scale', 'auto');
+                modelViewer.style.display = 'none';
+                
+                document.body.appendChild(modelViewer);
+                
+                // Trigger AR immediately when loaded
                 modelViewer.addEventListener('load', () => {
-                    setTimeout(() => {
-                        const arBtn = modelViewer.shadowRoot?.querySelector('[slot="ar-button"]') || arButton;
-                        arBtn?.click();
-                    }, 500);
+                    modelViewer.activateAR();
                 });
+            } else {
+                // Normal mode - show model with AR button
+                document.body.innerHTML = `
+                    <model-viewer
+                        src="${decodeURIComponent(modelUrl)}"
+                        alt="${decodeURIComponent(title)}"
+                        ar
+                        ar-modes="scene-viewer quick-look"
+                        camera-controls
+                        touch-action="pan-y"
+                        auto-rotate
+                        shadow-intensity="1"
+                        ar-scale="auto"
+                        loading="eager">
+                        <button slot="ar-button" style="
+                            position: absolute;
+                            bottom: 16px;
+                            left: 50%;
+                            transform: translateX(-50%);
+                            background: linear-gradient(135deg, #0DF2DF, #0AC5B8);
+                            border: none;
+                            color: white;
+                            padding: 12px 24px;
+                            border-radius: 24px;
+                            font-size: 16px;
+                            font-weight: bold;
+                            cursor: pointer;
+                            box-shadow: 0 4px 12px rgba(13, 242, 223, 0.4);">
+                            View in AR
+                        </button>
+                    </model-viewer>
+                `;
+                document.getElementById('loading').style.display = 'none';
             }
         }
     </script>
