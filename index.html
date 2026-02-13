@@ -33,15 +33,15 @@
             z-index: 1;
         }
         
-        /* Close button */
+        /* Close button - IMPROVED */
         #closeButton {
             position: absolute;
             top: 20px;
             right: 20px;
             width: 44px;
             height: 44px;
-            background: rgba(0, 0, 0, 0.6);
-            border: 2px solid rgba(255, 255, 255, 0.8);
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid rgba(255, 255, 255, 0.9);
             border-radius: 22px;
             display: flex;
             align-items: center;
@@ -53,7 +53,7 @@
         }
         
         #closeButton:hover {
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.9);
             transform: scale(1.1);
         }
         
@@ -116,36 +116,58 @@
         const title = urlParams.get('title') || 'AR Item';
         const autoAR = urlParams.get('autoAR') === 'true';
         
-        // Close viewer function
+        // Close viewer function - PROPERLY CLOSES AND RETURNS TO APP
         function closeViewer() {
-            // Try to close the window/tab
-            if (window.opener) {
+            // Try multiple methods to close
+            try {
+                // For in-app browsers (iOS, Android)
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.close) {
+                    window.webkit.messageHandlers.close.postMessage('close');
+                }
+                
+                // Standard window close
                 window.close();
-            } else {
-                // If opened directly, try to go back
+                
+                // If opened by another window
+                if (window.opener) {
+                    window.opener.focus();
+                    window.close();
+                }
+                
+                // Try to navigate back
                 if (window.history.length > 1) {
                     window.history.back();
                 } else {
-                    // Last resort - close or show message
+                    // Last resort - close anyway
                     window.close();
                 }
+            } catch (e) {
+                // Fallback - just close
+                window.close();
             }
         }
         
         if (!modelUrl) {
             document.getElementById('loading').innerHTML = 'No model URL provided';
         } else {
-            // Create model viewer
+            // Create model viewer with PROPER AR MODES
             const modelViewer = document.createElement('model-viewer');
             modelViewer.setAttribute('src', decodeURIComponent(modelUrl));
             modelViewer.setAttribute('alt', decodeURIComponent(title));
+            
+            // ✅ CRITICAL: Proper AR modes for placement
             modelViewer.setAttribute('ar', '');
             modelViewer.setAttribute('ar-modes', 'webxr scene-viewer quick-look');
+            
+            // ✅ CRITICAL: AR placement settings
+            modelViewer.setAttribute('ar-placement', 'floor');
+            modelViewer.setAttribute('ar-scale', 'auto');
+            
+            // Camera controls for 3D viewing before AR
             modelViewer.setAttribute('camera-controls', '');
             modelViewer.setAttribute('touch-action', 'pan-y');
             modelViewer.setAttribute('auto-rotate', '');
             modelViewer.setAttribute('shadow-intensity', '1');
-            modelViewer.setAttribute('ar-placement', 'floor');
             modelViewer.setAttribute('loading', 'eager');
             
             // Add AR button
@@ -160,22 +182,34 @@
             // Hide loading when ready
             modelViewer.addEventListener('load', () => {
                 document.getElementById('loading').style.display = 'none';
+                
+                // ✅ ONLY auto-launch if requested AND after model loads
+                if (autoAR) {
+                    setTimeout(() => {
+                        const arBtn = modelViewer.shadowRoot?.querySelector('[slot="ar-button"]') || arButton;
+                        if (arBtn) {
+                            arBtn.click();
+                        }
+                    }, 500);
+                }
             });
             
             modelViewer.addEventListener('error', () => {
                 document.getElementById('loading').innerHTML = 'Failed to load model';
             });
             
-            // Auto-launch AR if requested
-            if (autoAR) {
-                modelViewer.addEventListener('load', () => {
-                    setTimeout(() => {
-                        const arBtn = modelViewer.shadowRoot?.querySelector('[slot="ar-button"]') || arButton;
-                        arBtn?.click();
-                    }, 500);
-                });
-            }
+            // ✅ IMPORTANT: Listen for AR session end to auto-close
+            modelViewer.addEventListener('ar-status', (event) => {
+                if (event.detail.status === 'session-ended') {
+                    console.log('AR session ended');
+                    // Optional: Auto-close after AR ends
+                    // setTimeout(closeViewer, 1000);
+                }
+            });
         }
+        
+        // ✅ Handle Android back button
+        document.addEventListener('backbutton', closeViewer, false);
     </script>
 </body>
 </html>
