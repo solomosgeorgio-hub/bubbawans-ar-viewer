@@ -86,6 +86,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         const modelUrl = urlParams.get('model');
         const title = urlParams.get('title') || 'AR Item';
+        const autoAR = urlParams.get('autoAR') === 'true';
         
         const viewer = document.getElementById('viewer');
         const loading = document.getElementById('loading');
@@ -99,6 +100,13 @@
             // Hide loading when ready
             viewer.addEventListener('load', () => {
                 loading.style.display = 'none';
+                
+                // ✅ If autoAR=true, automatically launch AR
+                if (autoAR) {
+                    setTimeout(() => {
+                        viewer.activateAR();
+                    }, 500);
+                }
             });
             
             viewer.addEventListener('error', () => {
