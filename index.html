@@ -71,7 +71,7 @@
         auto-rotate
         ar
         ar-modes="webxr scene-viewer quick-look"
-        ar-scale="auto"
+        ar-placement="floor"
         shadow-intensity="1"
         exposure="1"
         shadow-softness="0.8">
@@ -90,6 +90,7 @@
         
         const viewer = document.getElementById('viewer');
         const loading = document.getElementById('loading');
+        const arButton = document.getElementById('ar-button');
         
         if (!modelUrl) {
             loading.innerHTML = 'No model URL provided';
@@ -101,11 +102,11 @@
             viewer.addEventListener('load', () => {
                 loading.style.display = 'none';
                 
-                // ✅ If autoAR=true, automatically launch AR
+                // ✅ If autoAR, automatically click the AR button
                 if (autoAR) {
                     setTimeout(() => {
-                        viewer.activateAR();
-                    }, 500);
+                        arButton.click();
+                    }, 300);
                 }
             });
             
