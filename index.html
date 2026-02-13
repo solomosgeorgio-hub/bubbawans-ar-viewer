@@ -36,7 +36,7 @@
             cursor: pointer;
             box-shadow: 0 4px 16px rgba(13, 242, 223, 0.4);
             z-index: 1000;
-            transition: all 0.8s ease;
+            transition: all 0.3s ease;
         }
         
         #ar-button:hover {
@@ -71,7 +71,7 @@
         auto-rotate
         ar
         ar-modes="webxr scene-viewer quick-look"
-        ar-placement="floor"
+        ar-scale="auto"
         shadow-intensity="1"
         exposure="1"
         shadow-softness="0.8">
@@ -90,7 +90,6 @@
         
         const viewer = document.getElementById('viewer');
         const loading = document.getElementById('loading');
-        const arButton = document.getElementById('ar-button');
         
         if (!modelUrl) {
             loading.innerHTML = 'No model URL provided';
@@ -102,11 +101,11 @@
             viewer.addEventListener('load', () => {
                 loading.style.display = 'none';
                 
-                // ✅ If autoAR, automatically click the AR button
+                // ✅ If autoAR=true, automatically launch AR
                 if (autoAR) {
                     setTimeout(() => {
-                        arButton.click();
-                    }, 300);
+                        viewer.activateAR();
+                    }, 500);
                 }
             });
             
